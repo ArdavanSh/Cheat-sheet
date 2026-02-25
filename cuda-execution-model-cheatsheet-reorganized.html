@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CUDA Execution Model Cheat Sheet — Reorganized</title>
+<style>
+:root{
+  --bg:#0f1117; --surface:#171b26; --surface2:#202637; --border:#2f3650;
+  --text:#e9ecff; --muted:#98a2cc; --dim:#6f7aa8;
+  --a1:#7c6af7; --a2:#4fc3f7; --a3:#f06292; --a4:#66bb6a; --a5:#ffa726; --a6:#26c6da;
+  --hl:rgba(124,106,247,.10);
+}
+.light{
+  --bg:#f5f7fd; --surface:#ffffff; --surface2:#f1f4fb; --border:#dce3f3;
+  --text:#182038; --muted:#52608b; --dim:#8b95b8; --hl:rgba(124,106,247,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,Segoe UI,system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.45}
+code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--surface2);padding:1px 5px;border-radius:4px;color:var(--a2);font-size:.86em}
+.top{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;justify-content:space-between;gap:14px;align-items:center}
+.top h1{font-size:1.03rem}
+.top p{color:var(--muted);font-size:.82rem}
+.btn{border:1px solid var(--border);background:var(--surface2);color:var(--muted);padding:6px 12px;border-radius:16px;cursor:pointer}
+.filters{position:sticky;top:63px;z-index:19;background:var(--surface);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;gap:8px;flex-wrap:wrap}
+.pill{border:1px solid var(--border);background:var(--surface2);color:var(--muted);padding:5px 11px;border-radius:999px;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;font-weight:700;cursor:pointer}
+.pill.active,.pill:hover{border-color:var(--a1);color:var(--a1);background:var(--hl)}
+.wrap{max-width:1550px;margin:0 auto;padding:20px}
+.section-title{margin:8px 0 12px;display:flex;gap:10px;align-items:center;color:var(--dim);font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;font-weight:700}
+.section-title:after{content:"";height:1px;flex:1;background:var(--border)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;margin-bottom:22px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.card[data-hidden="1"]{display:none}
+.wide{grid-column:1/-1}
+.head{padding:12px 14px;border-bottom:1px solid var(--border);background:linear-gradient(to bottom, rgba(255,255,255,.01), rgba(0,0,0,.03))}
+.headrow{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.title{font-weight:700;font-size:1rem}
+.abbr{font-size:.7rem;padding:3px 8px;border-radius:6px;color:#fff;font-weight:800;letter-spacing:.06em}
+.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.tag{font-size:.66rem;border:1px solid var(--border);background:var(--surface2);color:var(--muted);padding:2px 7px;border-radius:999px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+.desc{margin-top:8px;color:var(--muted);font-size:.82rem}
+.body{padding:12px 14px}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:6px 10px;font-size:.82rem}
+.kv .k{color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:.68rem;padding-top:2px}
+.kv .v{color:var(--text)}
+.note{margin-top:10px;padding:9px 10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);font-size:.78rem;color:var(--muted)}
+.note strong{color:var(--text)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+ul.clean{padding-left:18px;display:grid;gap:5px;font-size:.82rem}
+ul.clean li{color:var(--text)}
+ul.clean li span{color:var(--muted)}
+.table{width:100%;border-collapse:collapse;font-size:.78rem}
+.table th,.table td{padding:8px 9px;border-bottom:1px solid var(--border);vertical-align:top}
+.table th{font-size:.67rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;background:var(--surface2)}
+.table tr:nth-child(even) td{background:rgba(255,255,255,.01)}
+.table td small{color:var(--muted)}
+.good{color:var(--a4);font-weight:700}.warn{color:var(--a5);font-weight:700}.bad{color:var(--a3);font-weight:700}.info{color:var(--a2);font-weight:700}
+.two{display:grid;grid-template-columns:1.1fr .9fr;gap:12px}
+.diagram{display:grid;gap:7px}
+.level{display:grid;grid-template-columns:28px 1fr;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.level .lab{writing-mode:vertical-rl;transform:rotate(180deg);text-align:center;padding:6px 0;font-size:.64rem;font-weight:800;letter-spacing:.12em;color:#fff}
+.level .cnt{padding:8px 10px;font-size:.8rem}
+.level .cnt .m{color:var(--muted);font-size:.75rem;margin-top:2px}
+.footer{color:var(--dim);font-size:.74rem;padding:2px 3px 12px}
+@media (max-width:900px){.cols,.two{grid-template-columns:1fr}.filters{top:61px}.top{padding:12px 14px}.wrap{padding:12px}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div>
+    <h1>CUDA Execution Model Cheat Sheet <span style="color:var(--muted);font-weight:500">— Reorganized & completed</span></h1>
+    <p>Execution hierarchy · scheduling · synchronization · occupancy · launch config · profiling</p>
+  </div>
+  <button class="btn" onclick="document.body.classList.toggle('light')">🌙 / ☀️</button>
+</div>
+<div class="filters">
+  <button class="pill active" data-filter="all">All</button>
+  <button class="pill" data-filter="hier">Hierarchy</button>
+  <button class="pill" data-filter="sync">Sync</button>
+  <button class="pill" data-filter="warp">Warps</button>
+  <button class="pill" data-filter="occ">Occupancy</button>
+  <button class="pill" data-filter="launch">Launch</button>
+  <button class="pill" data-filter="perf">Performance</button>
+</div>
+
+<div class="wrap">
+
+  <div class="section-title">1. Core execution hierarchy</div>
+  <div class="grid">
+    <div class="card wide" data-tags="hier">
+      <div class="head">
+        <div class="headrow"><div class="title">CUDA hierarchy from kernel launch to lane</div><div class="abbr" style="background:var(--a1)">HIER</div></div>
+        <div class="tags"><span class="tag">grid</span><span class="tag">block</span><span class="tag">warp</span><span class="tag">thread</span></div>
+        <div class="desc">Most CUDA tuning decisions are about how your work maps onto this hierarchy and how that mapping interacts with SM resources.</div>
+      </div>
+      <div class="body two">
+        <div class="diagram">
+          <div class="level"><div class="lab" style="background:#27358f">GRID</div><div class="cnt"><b>Grid</b> = all blocks in one kernel launch<div class="m">Blocks are independent by default; they may run in any order on any SM.</div></div></div>
+          <div class="level"><div class="lab" style="background:#1c5f84">BLOCK</div><div class="cnt"><b>Thread Block (CTA)</b> = cooperative group on one SM<div class="m">Shares shared memory and can use <code>__syncthreads()</code>. Max 1024 threads/block.</div></div></div>
+          <div class="level"><div class="lab" style="background:#5b2fa2">WARP</div><div class="cnt"><b>Warp</b> = 32 threads (SIMT scheduling unit)<div class="m">Warp scheduler issues instructions for warps; divergence serializes paths.</div></div></div>
+          <div class="level"><div class="lab" style="background:#8c2445">THREAD</div><div class="cnt"><b>Thread</b> = one logical lane<div class="m">Own registers, private local memory (spills), scalar code view.</div></div></div>
+        </div>
+        <div>
+          <div class="kv">
+            <div class="k">1D global idx</div><div class="v"><code>gid = blockIdx.x * blockDim.x + threadIdx.x</code></div>
+            <div class="k">Warp id</div><div class="v"><code>warpId = threadIdx.x >> 5</code> (within block)</div>
+            <div class="k">Lane id</div><div class="v"><code>laneId = threadIdx.x &amp; 31</code></div>
+            <div class="k">Warp size</div><div class="v">Always <span class="info">32</span> (do not hardcode assumptions beyond that constant, use <code>warpSize</code>)</div>
+            <div class="k">Thread dims</div><div class="v"><code>threadIdx.{x,y,z}</code>, <code>blockIdx.{x,y,z}</code>, <code>blockDim.{x,y,z}</code>, <code>gridDim.{x,y,z}</code></div>
+          </div>
+          <div class="note"><strong>Organization rule of thumb:</strong> First choose a block shape that matches your data tile / memory layout; then check occupancy, divergence, and coalescing.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-tags="hier launch">
+      <div class="head">
+        <div class="headrow"><div class="title">Built-in indices and common mappings</div><div class="abbr" style="background:var(--a2)">ID</div></div>
+        <div class="tags"><span class="tag">1D</span><span class="tag">2D</span><span class="tag">3D</span></div>
+      </div>
+      <div class="body">
+        <div class="kv">
+          <div class="k">1D array</div><div class="v"><code>i = blockIdx.x * blockDim.x + threadIdx.x</code></div>
+          <div class="k">2D matrix</div><div class="v"><code>row = blockIdx.y*blockDim.y + threadIdx.y</code><br><code>col = blockIdx.x*blockDim.x + threadIdx.x</code></div>
+          <div class="k">3D volume</div><div class="v">Add <code>z = blockIdx.z*blockDim.z + threadIdx.z</code></div>
+          <div class="k">Linearized 2D</div><div class="v"><code>idx = row * pitch + col</code> (pitch in elements, or bytes if using pitched alloc)</div>
+          <div class="k">Bounds guard</div><div class="v"><code>if (i &lt; N) ...</code> or <code>if (row &lt; H &amp;&amp; col &lt; W)</code></div>
+        </div>
+        <div class="note">Tail warps (partial final warp) are normal. They reduce lane utilization but are usually fine if they only occur at boundaries.</div>
+      </div>
+    </div>
+
+    <div class="card" data-tags="hier perf warp">
+      <div class="head">
+        <div class="headrow"><div class="title">SIMT vs SIMD mental model</div><div class="abbr" style="background:var(--a6)">SIMT</div></div>
+        <div class="tags"><span class="tag">warp</span><span class="tag">divergence</span></div>
+      </div>
+      <div class="body">
+        <ul class="clean">
+          <li><b>SIMT</b>: Threads are programmed independently, but execution is grouped by warp. <span>(CUDA abstraction)</span></li>
+          <li><b>SIMD-like issue</b>: A warp usually executes one instruction across active lanes. <span>(hardware behavior)</span></li>
+          <li><b>Divergence</b>: If lanes take different branches, paths execute serially with masks.</li>
+          <li><b>Predication</b>: Very short conditionals may compile to predicated instructions (no explicit branch).</li>
+          <li><b>Volta+</b>: Independent Thread Scheduling improves safety/flexibility, but warp-level assumptions still require explicit masks and sync where needed.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">2. Synchronization and communication scopes</div>
+  <div class="grid">
+    <div class="card" data-tags="sync warp">
+      <div class="head"><div class="headrow"><div class="title">Synchronization primitives by scope</div><div class="abbr" style="background:var(--a3)">SYNC</div></div><div class="tags"><span class="tag">warp</span><span class="tag">block</span><span class="tag">grid</span></div></div>
+      <div class="body">
+        <table class="table">
+          <thead><tr><th>Primitive</th><th>Scope</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td><code>__syncwarp(mask)</code></td><td>Warp</td><td>Reconverge / order participating lanes in a warp</td></tr>
+            <tr><td><code>__syncthreads()</code></td><td>Block</td><td>Barrier for all threads in block; shared-memory handoff</td></tr>
+            <tr><td><code>__syncthreads_count/and/or</code></td><td>Block</td><td>Barrier + simple reduction of predicates</td></tr>
+            <tr><td>Cooperative Groups <code>this_grid().sync()</code></td><td>Grid</td><td>Grid-wide sync <small>(requires cooperative launch)</small></td></tr>
+            <tr><td>Kernel relaunch</td><td>Grid+</td><td>Universal global synchronization point</td></tr>
+          </tbody>
+        </table>
+        <div class="note"><strong>Important:</strong> Never call <code>__syncthreads()</code> in divergent control flow unless every thread in the block reaches it.</div>
+      </div>
+    </div>
+
+    <div class="card" data-tags="sync warp perf">
+      <div class="head"><div class="headrow"><div class="title">Warp-level communication (shuffle / vote)</div><div class="abbr" style="background:var(--a1)">WLVL</div></div><div class="tags"><span class="tag">shuffle</span><span class="tag">ballot</span><span class="tag">mask</span></div></div>
+      <div class="body">
+        <div class="kv">
+          <div class="k">Active mask</div><div class="v"><code>unsigned m = __activemask();</code></div>
+          <div class="k">Broadcast / exchange</div><div class="v"><code>__shfl_sync(m, x, srcLane)</code></div>
+          <div class="k">Down reduction</div><div class="v"><code>__shfl_down_sync(m, x, offset)</code></div>
+          <div class="k">Vote</div><div class="v"><code>__ballot_sync(m, pred)</code>, <code>__all_sync</code>, <code>__any_sync</code></div>
+          <div class="k">Match</div><div class="v"><code>__match_any_sync</code> / <code>__match_all_sync</code> for key grouping</div>
+        </div>
+        <div class="note">Use explicit masks on Volta+; don't rely on implicit warp-synchronous behavior after divergent code.</div>
+      </div>
+    </div>
+
+    <div class="card" data-tags="sync perf">
+      <div class="head"><div class="headrow"><div class="title">Memory ordering essentials</div><div class="abbr" style="background:var(--a5)">FENCE</div></div><div class="tags"><span class="tag">atomics</span><span class="tag">visibility</span></div></div>
+      <div class="body">
+        <ul class="clean">
+          <li><b>Barrier</b> (like <code>__syncthreads()</code>) provides both execution sync and shared-memory visibility within a block.</li>
+          <li><b>Atomics</b> serialize updates to one address, but they are not a full-block barrier.</li>
+          <li><b>Fences</b> (<code>__threadfence_block</code>, <code>__threadfence</code>, <code>__threadfence_system</code>) order writes across scopes.</li>
+          <li>For producer→consumer across blocks, combine correct ordering + signaling (often atomics) + kernel boundary or cooperative sync.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">3. Warp execution, divergence, and scheduling</div>
+  <div class="grid">
+    <div class="card" data-tags="warp perf">
+      <div class="head"><div class="headrow"><div class="title">Warp scheduler behavior (high level)</div><div class="abbr" style="background:#5b2fa2">WARP</div></div><div class="tags"><span class="tag">eligible</span><span class="tag">stalls</span></div></div>
+      <div class="body">
+        <div class="kv">
+          <div class="k">Scheduling unit</div><div class="v">Warp (32 threads)</div>
+          <div class="k">Goal</div><div class="v">Issue from an <b>eligible</b> warp while others wait on dependencies</div>
+          <div class="k">Hidden latency</div><div class="v">Memory, long ALU ops, pipeline dependencies</div>
+          <div class="k">Needs</div><div class="v">Enough active warps <i>and/or</i> enough ILP to keep execution units busy</div>
+        </div>
+        <div class="note"><strong>Practical tuning:</strong> occupancy helps only if the added warps are actually eligible (not all stalled on the same bottleneck).</div>
+      </div>
+    </div>
+
+    <div class="card" data-tags="warp perf">
+      <div class="head"><div class="headrow"><div class="title">Divergence cost model</div><div class="abbr" style="background:var(--a3)">DIV</div></div><div class="tags"><span class="tag">branching</span><span class="tag">predication</span></div></div>
+      <div class="body">
+        <div class="kv">
+          <div class="k">Best case</div><div class="v"><span class="good">Warp-uniform branch</span> → no divergence penalty</div>
+          <div class="k">Common case</div><div class="v">Two paths in a warp → roughly serialized into two masked passes</div>
+          <div class="k">Worst case</div><div class="v"><span class="bad">Path per lane</span> → severe throughput collapse</div>
+          <div class="k">Avoid by</div><div class="v">Mapping data so branch conditions align with warp boundaries; split kernels when branch behavior differs widely</div>
+          <div class="k">Okay when</div><div class="v">Boundary checks only affect a few warps or rare conditions</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-tags="warp perf launch">
+      <div class="head"><div class="headrow"><div class="title">Coalescing and warp memory access</div><div class="abbr" style="background:var(--a2)">MEM</div></div><div class="tags"><span class="tag">global memory</span><span class="tag">coalescing</span></div></div>
+      <div class="body">
+        <ul class="clean">
+          <li>Global memory is most efficient when adjacent lanes access adjacent addresses.</li>
+          <li>Strided or scattered accesses increase memory transactions and reduce throughput.</li>
+          <li>Map <code>threadIdx.x</code> to the fastest-varying data dimension whenever possible.</li>
+          <li>For matrices, row/column choice should match your storage layout and reuse strategy.</li>
+          <li>Use shared memory tiling when direct global accesses are uncoalesced or repeatedly reused.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">4. Block/SM resources and occupancy</div>
+  <div class="grid">
+    <div class="card wide" data-tags="occ perf">
+      <div class="head"><div class="headrow"><div class="title">Occupancy limits — what actually caps resident warps</div><div class="abbr" style="background:var(--a4)">OCC</div></div><div class="tags"><span class="tag">registers</span><span class="tag">shared memory</span><span class="tag">warps</span><span class="tag">blocks</span></div><div class="desc">Occupancy = active warps / maximum warps on an SM. It is a capacity metric, not a direct performance metric.</div></div>
+      <div class="body">
+        <table class="table">
+          <thead><tr><th>Limiter</th><th>How it caps occupancy</th><th>Symptom</th><th>Typical fix</th></tr></thead>
+          <tbody>
+            <tr><td>Warp slots</td><td>Hard architectural cap (e.g., up to 64 resident warps/SM on many recent NVIDIA GPUs)</td><td>Can't exceed max occupancy even with tiny kernels</td><td>None (hardware limit)</td></tr>
+            <tr><td>Threads / block shape</td><td>Small blocks may hit max blocks/SM before max warps/SM</td><td>Example: 32-thread blocks often top out at ~50% warp occupancy</td><td>Use 128–256 threads/block unless algorithm dictates otherwise</td></tr>
+            <tr><td>Registers / thread</td><td>More live values → fewer resident warps/blocks</td><td><code>ptxas -v</code> shows high register usage or spills</td><td>Reduce live ranges, tune unroll, <code>__launch_bounds__</code>, maybe <code>--maxrregcount</code></td></tr>
+            <tr><td>Shared memory / block</td><td>Big tiles reduce resident blocks</td><td>Only 1–2 blocks/SM</td><td>Shrink tile or split stages; use async copies / pipelining</td></tr>
+            <tr><td>Block count cap</td><td>SM can host only up to a fixed number of blocks</td><td>Tiny blocks underfill warps</td><td>Increase block size</td></tr>
+          </tbody>
+        </table>
+        <div class="note"><strong>Healthy default:</strong> Start with <code>blockDim = 128</code> or <code>256</code>. Then profile. Compute-bound kernels may run best well below 100% occupancy if ILP is strong.</div>
+      </div>
+    </div>
+
+    <div class="card" data-tags="occ perf">
+      <div class="head"><div class="headrow"><div class="title">Shared memory & bank conflicts</div><div class="abbr" style="background:var(--a3)">SMEM</div></div><div class="tags"><span class="tag">banks</span><span class="tag">padding</span></div></div>
+      <div class="body">
+        <div class="kv">
+          <div class="k">Banks</div><div class="v">32 banks (bank mapping depends on access width / architecture mode)</div>
+          <div class="k">Conflict-free</div><div class="v">Lanes hit different banks, or same address (broadcast)</div>
+          <div class="k">Conflict</div><div class="v">Different addresses in same bank → serialized access</div>
+          <div class="k">Classic fix</div><div class="v">Padding: <code>float tile[32][33]</code> to avoid stride-32 conflicts</div>
+          <div class="k">Dynamic smem</div><div class="v"><code>extern __shared__ T smem[];</code> and pass bytes in launch config</div>
+        </div>
+        <div class="note">Use Nsight Compute shared-memory conflict metrics to confirm. Padding is a common fix, not a universal one.</div>
+      </div>
+    </div>
+
+    <div class="card" data-tags="occ perf">
+      <div class="head"><div class="headrow"><div class="title">Occupancy and ILP tradeoff</div><div class="abbr" style="background:var(--a6)">ILP</div></div><div class="tags"><span class="tag">unroll</span><span class="tag">register pressure</span></div></div>
+      <div class="body">
+        <ul class="clean">
+          <li><b>Higher ILP</b> helps a warp make progress while waiting on dependent instructions.</li>
+          <li><b>But</b> ILP usually increases register usage, which can lower occupancy.</li>
+          <li>This tradeoff is normal: many fast kernels choose <i>moderate occupancy + strong ILP</i>.</li>
+          <li>Use <code>#pragma unroll</code> selectively and verify with profiling.</li>
+          <li>If spills appear, back off unrolling or restructure temporaries.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">5. Launch configuration and practical setup</div>
+  <div class="grid">
+    <div class="card" data-tags="launch hier">
+      <div class="head"><div class="headrow"><div class="title">Launch configuration quick reference</div><div class="abbr" style="background:var(--a1)">LAUNCH</div></div><div class="tags"><span class="tag">gridDim</span><span class="tag">blockDim</span><span class="tag">smem</span></div></div>
+      <div class="body">
+        <div class="note" style="margin-top:0"><code>kernel&lt;&lt;&lt;gridDim, blockDim, dynamicSmemBytes, stream&gt;&gt;&gt;(args...);</code></div>
+        <div class="kv" style="margin-top:10px">
+          <div class="k">gridDim</div><div class="v">Number of blocks in grid (1D/2D/3D)</div>
+          <div class="k">blockDim</div><div class="v">Threads per block (shape matters for memory mapping)</div>
+          <div class="k">dynamicSmem</div><div class="v">Per-block shared memory bytes allocated at launch</div>
+          <div class="k">stream</div><div class="v">Execution stream (ordering/concurrency control)</div>
+        </div>
+        <div class="note"><strong>1D pattern:</strong><br><code>int B=256; int G=(N+B-1)/B;</code><br><code>kernel&lt;&lt;&lt;G,B&gt;&gt;&gt;(...);</code></div>
+      </div>
+    </div>
+
+    <div class="card" data-tags="launch occ perf">
+      <div class="head"><div class="headrow"><div class="title">Compiler/runtime knobs that matter</div><div class="abbr" style="background:var(--a5)">KNOBS</div></div><div class="tags"><span class="tag">launch_bounds</span><span class="tag">occupancy api</span></div></div>
+      <div class="body">
+        <div class="kv">
+          <div class="k">Occupancy API</div><div class="v"><code>cudaOccupancyMaxPotentialBlockSize()</code> for a decent starting block size</div>
+          <div class="k">Launch bounds</div><div class="v"><code>__launch_bounds__(maxThreadsPerBlock, minBlocksPerSM)</code> guides register allocation</div>
+          <div class="k">Regs report</div><div class="v"><code>ptxas -v</code> shows registers, spills, shared memory</div>
+          <div class="k">Max regs</div><div class="v"><code>--maxrregcount</code> can raise occupancy but may cause spills; measure before/after</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-tags="launch sync">
+      <div class="head"><div class="headrow"><div class="title">Cooperative launch and clusters (advanced)</div><div class="abbr" style="background:var(--a4)">ADV</div></div><div class="tags"><span class="tag">cooperative groups</span><span class="tag">cluster</span></div></div>
+      <div class="body">
+        <ul class="clean">
+          <li><b>Cooperative launch</b> enables grid-wide synchronization via cooperative groups.</li>
+          <li><b>Thread block clusters</b> (Hopper+) add a larger execution/sync scope than a single block.</li>
+          <li>Cluster features are architecture-specific and come with placement constraints.</li>
+          <li>Use them only when the algorithm truly benefits from cross-block cooperation.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">6. Common limits and gotchas</div>
+  <div class="grid">
+    <div class="card wide" data-tags="launch occ hier">
+      <div class="head"><div class="headrow"><div class="title">Hardware / programming limits checklist</div><div class="abbr" style="background:var(--a3)">LIMITS</div></div><div class="tags"><span class="tag">max threads</span><span class="tag">grid dims</span><span class="tag">registers</span></div></div>
+      <div class="body cols">
+        <div>
+          <table class="table">
+            <thead><tr><th>Limit</th><th>Typical value / rule</th></tr></thead>
+            <tbody>
+              <tr><td>Warp size</td><td>32 threads</td></tr>
+              <tr><td>Threads per block</td><td>≤ 1024</td></tr>
+              <tr><td>blockDim.z</td><td>Much smaller than x/y max; respect per-dimension limits</td></tr>
+              <tr><td>Registers per thread</td><td>Hard cap exists; high usage lowers occupancy and may spill</td></tr>
+              <tr><td>Shared memory per block</td><td>Limited and architecture-dependent; dynamic SMEM may need opt-in attributes</td></tr>
+              <tr><td>Grid dimensions</td><td>Per-dimension limits differ (<code>x</code> is much larger than <code>y/z</code>)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <ul class="clean">
+            <li><b>Incorrect barrier placement</b> is a top source of hangs.</li>
+            <li><b>100% occupancy</b> is not the goal; throughput is.</li>
+            <li><b>Small blocks</b> can underutilize SMs due to max-blocks/SM cap.</li>
+            <li><b>Big blocks</b> can hurt tail handling and reduce residency.</li>
+            <li><b>Spills</b> often erase gains from aggressive unrolling.</li>
+            <li><b>Divergence</b> at boundaries is usually acceptable; divergence in the hot interior is expensive.</li>
+          </ul>
+          <div class="note"><strong>Keep this order:</strong> correctness → coalescing → block shape → occupancy/regs → unrolling/ILP → micro-optimizations.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">7. Profiling workflow and key metrics</div>
+  <div class="grid">
+    <div class="card wide" data-tags="perf occ warp">
+      <div class="head"><div class="headrow"><div class="title">Nsight Compute triage flow</div><div class="abbr" style="background:var(--a2)">NCU</div></div><div class="tags"><span class="tag">roofline</span><span class="tag">stalls</span><span class="tag">metrics</span></div></div>
+      <div class="body">
+        <table class="table">
+          <thead><tr><th>Step</th><th>Question</th><th>What to inspect</th><th>Likely action</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Compute-bound or memory-bound?</td><td>Roofline / throughput sections</td><td>Choose optimization path</td></tr>
+            <tr><td>2</td><td>Why are warps not issuing?</td><td><code>smsp__warp_issue_stalled_*</code></td><td>Target top stall reason</td></tr>
+            <tr><td>3</td><td>Is occupancy too low?</td><td>Active warps %, regs, smem usage</td><td>Tune block size / regs / smem</td></tr>
+            <tr><td>4</td><td>Are lanes underutilized?</td><td>Predicated-on %, branch efficiency</td><td>Fix divergence or tail mapping</td></tr>
+            <tr><td>5</td><td>Memory path healthy?</td><td>Load/store efficiency, coalescing, cache hit rates</td><td>Remap threads, tile, prefetch</td></tr>
+            <tr><td>6</td><td>Shared memory conflicts?</td><td>SMEM bank conflict metrics</td><td>Padding / layout change</td></tr>
+            <tr><td>7</td><td>Did the change help?</td><td>Re-profile same input</td><td>Iterate</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">This version reorganizes the original cheat sheet into a dependency-friendly order (hierarchy → sync → warps → occupancy → launch → limits → profiling) and adds missing execution-model topics like synchronization scope, warp-level intrinsics, memory ordering, coalescing, and a clearer profiling workflow.</div>
+</div>
+
+<script>
+const pills=[...document.querySelectorAll('.pill')];
+const cards=[...document.querySelectorAll('.card')];
+pills.forEach(p=>p.addEventListener('click',()=>{
+  pills.forEach(x=>x.classList.remove('active')); p.classList.add('active');
+  const f=p.dataset.filter;
+  cards.forEach(c=>{
+    if(f==='all'){c.dataset.hidden='0';return;}
+    const tags=(c.dataset.tags||'').split(/\s+/);
+    c.dataset.hidden = tags.includes(f) ? '0' : '1';
+  });
+}));
+</script>
+</body>
+</html>
