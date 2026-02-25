@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distributed LLM Parallelism Cheat Sheet</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
+
+  /* ── THEME TOKENS ── */
+  [data-theme="light"] {
+    --bg: #f5f4f0;
+    --bg-grad1: rgba(80, 160, 200, 0.08);
+    --bg-grad2: rgba(160, 80, 200, 0.06);
+    --surface: #ffffff;
+    --surface2: #f9f8f5;
+    --border: #e4e2db;
+    --text: #1a1917;
+    --text2: #2e2c28;
+    --muted: #7a786e;
+    --desc: #4a4840;
+    --scope-txt: #6a6860;
+    --pip-off: #dddbd3;
+    --good: #2d7a2d;
+    --bad: #b83030;
+    --partial: #a06010;
+    --abbr-bg: rgba(0,0,0,0.04);
+    --row-hover: rgba(0,0,0,0.025);
+    --thead-bg: #f0ede6;
+    --toggle-bg: #e4e2db;
+    --toggle-knob: #7a786e;
+    --shadow: 0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
+  }
+
+  [data-theme="dark"] {
+    --bg: #111118;
+    --bg-grad1: rgba(80, 160, 210, 0.07);
+    --bg-grad2: rgba(160, 80, 210, 0.07);
+    --surface: #1a1a24;
+    --surface2: #14141e;
+    --border: #28283a;
+    --text: #e8e8f0;
+    --text2: #c8c8e0;
+    --muted: #6b6b8a;
+    --desc: #b0b0c8;
+    --scope-txt: #7878a0;
+    --pip-off: #28283a;
+    --good: #6abf40;
+    --bad: #d96060;
+    --partial: #c88a30;
+    --abbr-bg: rgba(255,255,255,0.05);
+    --row-hover: rgba(255,255,255,0.02);
+    --thead-bg: #14141e;
+    --toggle-bg: #28283a;
+    --toggle-knob: #6b6b8a;
+    --shadow: none;
+  }
+
+  /* ── ACCENT PALETTE — smooth, desaturated tones ── */
+  :root {
+    --c-batch:    #3a9abf;   /* muted teal-blue */
+    --c-weight:   #b05090;   /* dusty rose-purple */
+    --c-optim:    #5a9e30;   /* sage green */
+    --c-seq:      #c07830;   /* warm amber */
+    --c-layer:    #8055c0;   /* soft violet */
+    --c-tensor:   #2e9e70;   /* eucalyptus */
+    --c-expert:   #3a7abf;   /* slate blue */
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    padding: 48px 24px 72px;
+    background-image:
+      radial-gradient(ellipse at 15% 8%, var(--bg-grad1) 0%, transparent 55%),
+      radial-gradient(ellipse at 85% 92%, var(--bg-grad2) 0%, transparent 55%);
+    transition: background 0.35s, color 0.35s;
+  }
+
+  /* ── HEADER ── */
+  .header-wrap {
+    max-width: 1400px;
+    margin: 0 auto 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  h1 {
+    font-size: clamp(1.7rem, 4vw, 2.6rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(130deg, var(--c-batch) 0%, var(--c-layer) 60%, var(--c-weight) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── THEME TOGGLE ── */
+  .theme-toggle {
+    position: absolute;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .toggle-track {
+    width: 42px; height: 22px;
+    background: var(--toggle-bg);
+    border-radius: 11px;
+    border: 1px solid var(--border);
+    position: relative;
+    transition: background 0.3s;
+  }
+
+  .toggle-knob {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--toggle-knob);
+    position: absolute;
+    top: 2px; left: 2px;
+    transition: transform 0.3s, background 0.3s;
+  }
+
+  [data-theme="dark"] .toggle-knob { transform: translateX(20px); background: var(--c-layer); }
+
+  .toggle-icon { font-size: 0.8rem; }
+
+  .subtitle {
+    text-align: center;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    margin-bottom: 36px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* ── LEGEND ── */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 40px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; opacity: 0.85; }
+
+  /* ── CARDS GRID ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    max-width: 1400px;
+    margin: 0 auto 52px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s, background 0.35s, box-shadow 0.2s;
+    animation: fadeIn 0.5s ease both;
+    box-shadow: var(--shadow);
+  }
+
+  .card:hover { transform: translateY(-3px); border-color: var(--card-accent); box-shadow: 0 8px 28px rgba(0,0,0,0.1); }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--card-accent);
+    opacity: 0.85;
+  }
+
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; gap: 12px; }
+
+  .card-title { font-size: 1.02rem; font-weight: 800; color: var(--card-accent); letter-spacing: -0.01em; }
+
+  .card-abbr {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.58rem;
+    color: var(--muted);
+    background: var(--abbr-bg);
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .dimension-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+
+  .dim-tag {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.56rem;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    opacity: 0.85;
+  }
+
+  .desc { font-size: 0.78rem; color: var(--desc); line-height: 1.65; margin-bottom: 10px; }
+
+  .props { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+
+  .prop-row { display: flex; gap: 8px; font-size: 0.72rem; }
+
+  .prop-label {
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    min-width: 80px;
+    flex-shrink: 0;
+    font-size: 0.58rem;
+    padding-top: 2px;
+  }
+
+  .prop-val { color: var(--text2); line-height: 1.5; }
+  .prop-val.good { color: var(--good); }
+  .prop-val.bad  { color: var(--bad);  }
+
+  /* ── LAYER COVERAGE ── */
+  .layer-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .layer-section-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.56rem;
+    color: var(--muted);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    margin-bottom: 7px;
+  }
+
+  .layer-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+
+  .layer-cell {
+    border-radius: 6px;
+    padding: 5px 7px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    transition: background 0.35s, border-color 0.35s;
+  }
+
+  .layer-cell.comm {
+    border-color: color-mix(in srgb, var(--card-accent) 50%, transparent);
+    background: color-mix(in srgb, var(--card-accent) 8%, var(--surface2));
+  }
+
+  .layer-cell.local {
+    border-color: color-mix(in srgb, var(--card-accent) 30%, transparent);
+    background: color-mix(in srgb, var(--card-accent) 4%, var(--surface2));
+  }
+
+  .layer-cell.neutral { opacity: 0.6; }
+
+  .layer-name {
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 0.56rem;
+    color: var(--text2);
+  }
+
+  .layer-cell.comm  .layer-name { color: var(--card-accent); }
+  .layer-cell.local .layer-name { color: color-mix(in srgb, var(--card-accent) 70%, var(--text2)); }
+
+  .layer-status {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.52rem;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  /* ── SCOPE BAR ── */
+  .scope-bar {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .scope-label { font-family: 'Space Mono', monospace; font-size: 0.56rem; color: var(--muted); min-width: 44px; padding-top: 3px; }
+
+  .scope-right { display: flex; flex-direction: column; gap: 4px; }
+
+  .scope-pips { display: flex; gap: 3px; }
+
+  .pip { width: 16px; height: 4px; border-radius: 3px; background: var(--pip-off); transition: background 0.3s; }
+  .pip.active { background: var(--card-accent); opacity: 0.75; }
+
+  .scope-range { font-family: 'Space Mono', monospace; font-size: 0.56rem; color: var(--scope-txt); line-height: 1.5; }
+
+  /* ── TABLES ── */
+  .table-section { max-width: 1400px; margin: 0 auto 44px; }
+
+  .section-title {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--muted);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-family: 'Space Mono', monospace;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 11px;
+  }
+
+  .table-wrap { overflow-x: auto; border-radius: 14px; border: 1px solid var(--border); box-shadow: var(--shadow); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.73rem; min-width: 860px; }
+
+  thead th {
+    background: var(--thead-bg);
+    padding: 10px 13px;
+    text-align: left;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.58rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.35s;
+  }
+
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--row-hover); }
+
+  tbody td { padding: 10px 13px; vertical-align: top; color: var(--text2); transition: color 0.35s; }
+  tbody td:first-child { font-weight: 700; color: var(--text); }
+
+  .check   { color: var(--good);    font-size: 1rem; }
+  .cross   { color: var(--bad);     font-size: 1rem; }
+  .partial { color: var(--partial); font-size: 1rem; }
+
+  /* layer coverage mini-pills inside table cells */
+  .lc-pills { display: flex; flex-wrap: wrap; gap: 3px; }
+
+  .lc-pill {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.52rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid;
+    white-space: nowrap;
+    line-height: 1.7;
+  }
+
+  [data-theme="light"] .lc-comm  { color: #196878; border-color: #19687830; background: #19687810; }
+  [data-theme="light"] .lc-local { color: #286820; border-color: #28682030; background: #28682010; }
+  [data-theme="light"] .lc-none  { color: var(--muted); border-color: var(--border); background: transparent; }
+
+  [data-theme="dark"] .lc-comm  { color: #5abcd0; border-color: #5abcd030; background: #5abcd010; }
+  [data-theme="dark"] .lc-local { color: #6ab848; border-color: #6ab84830; background: #6ab84810; }
+  [data-theme="dark"] .lc-none  { color: var(--muted); border-color: var(--border); background: transparent; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .card:nth-child(1){animation-delay:0.04s} .card:nth-child(2){animation-delay:0.08s}
+  .card:nth-child(3){animation-delay:0.12s} .card:nth-child(4){animation-delay:0.16s}
+  .card:nth-child(5){animation-delay:0.20s} .card:nth-child(6){animation-delay:0.24s}
+  .card:nth-child(7){animation-delay:0.28s} .card:nth-child(8){animation-delay:0.32s}
+  .card:nth-child(9){animation-delay:0.36s}
+</style>
+</head>
+<body>
+
+<div class="header-wrap">
+  <h1>Distributed LLM Parallelism</h1>
+  <label class="theme-toggle" title="Toggle light / dark">
+    <span class="toggle-icon">☀️</span>
+    <div class="toggle-track"><div class="toggle-knob"></div></div>
+    <span class="toggle-icon">🌙</span>
+  </label>
+</div>
+<p class="subtitle">Cheat Sheet — Dimension · Layer Coverage · Scope</p>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-batch)"></div>Batch / Sample</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-weight)"></div>Model Weights</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-optim)"></div>Optimizer State</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-seq)"></div>Sequence Length</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-layer)"></div>Layers / Depth</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-tensor)"></div>Tensor Width</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--c-expert)"></div>Experts (MoE)</div>
+</div>
+
+<div class="grid">
+
+<!-- ═══════ DATA PARALLELISM ═══════ -->
+<div class="card" style="--card-accent:var(--c-batch)">
+  <div class="card-header"><div class="card-title">Data Parallelism</div><div class="card-abbr">DP</div></div>
+  <div class="dimension-tags">
+    <span class="dim-tag" style="color:var(--c-batch);border-color:color-mix(in srgb,var(--c-batch) 35%,transparent);background:color-mix(in srgb,var(--c-batch) 10%,transparent);">Batch / Sample</span>
+  </div>
+  <p class="desc">Replicates the full model on every GPU. Each GPU processes a different mini-batch and gradients are all-reduced across replicas after each step.</p>
+  <div class="props">
+    <div class="prop-row"><span class="prop-label">Splits</span><span class="prop-val">Data (batch) across GPUs</span></div>
+    <div class="prop-row"><span class="prop-label">Bottleneck</span><span class="prop-val bad">Full model must fit in one GPU's VRAM</span></div>
+    <div class="prop-row"><span class="prop-label">Comm.</span><span class="prop-val">All-reduce of gradients after each backward pass</span></div>
+    <div class="prop-row"><span class="prop-label">Best for</span><span class="prop-val good">Models that fit in one GPU; scaling throughput linearly</span></div>
+  </div>
+  <div class="layer-section">
+    <div class="layer-section-title">Layer-level behaviour — no sequence or weight splitting</div>
+    <div class="layer-grid">
+      <div class="layer-cell neutral"><span class="layer-name">Attention</span><span class="layer-status">Full replica; full seq; no seq split</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">MLP / FFN</span><span class="layer-status">Full replica; full seq; no seq split</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">LayerNorm</span><span class="layer-status">Full replica; full seq; no seq split</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">Embedding</span><span class="layer-status">Full replica on each GPU</span></div>
+      <div class="layer-cell comm" style="grid-column:span 2"><span class="layer-name">Gradient sync (post-backward)</span><span class="layer-status">All-reduce across all DP ranks — only cross-GPU interaction; once per step</span></div>
+    </div>
+  </div>
+  <div class="scope-bar">
+    <span class="scope-label">SCOPE</span>
+    <div class="scope-right">
+      <div class="scope-pips"><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip"></div></div>
+      <span class="scope-range">Intra-node → Multi-node (8–1000s GPUs). Scales freely via NCCL/RDMA; BW bound on gradient all-reduce.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ ZERO-1 ═══════ -->
+<div class="card" style="--card-accent:var(--c-optim)">
+  <div class="card-header"><div class="card-title">ZeRO Stage 1</div><div class="card-abbr">ZeRO-1</div></div>
+  <div class="dimension-tags">
+    <span class="dim-tag" style="color:var(--c-batch);border-color:color-mix(in srgb,var(--c-batch) 35%,transparent);background:color-mix(in srgb,var(--c-batch) 10%,transparent);">Batch / Sample</span>
+    <span class="dim-tag" style="color:var(--c-optim);border-color:color-mix(in srgb,var(--c-optim) 35%,transparent);background:color-mix(in srgb,var(--c-optim) 10%,transparent);">Optimizer State</span>
+  </div>
+  <p class="desc">Like DP but partitions optimizer states (Adam moments, fp32 master weights) across DP ranks. Each rank keeps only its shard of optimizer state; params and grads remain replicated.</p>
+  <div class="props">
+    <div class="prop-row"><span class="prop-label">Splits</span><span class="prop-val">Optimizer states across DP ranks</span></div>
+    <div class="prop-row"><span class="prop-label">Memory ↓</span><span class="prop-val good">~4× reduction in optimizer memory vs DP</span></div>
+    <div class="prop-row"><span class="prop-label">Comm.</span><span class="prop-val">All-reduce gradients (same as DP); scatter optim updates</span></div>
+    <div class="prop-row"><span class="prop-label">Overhead</span><span class="prop-val good">Minimal over vanilla DP — drop-in replacement</span></div>
+  </div>
+  <div class="layer-section">
+    <div class="layer-section-title">Layer-level behaviour — identical to DP in the forward/backward</div>
+    <div class="layer-grid">
+      <div class="layer-cell neutral"><span class="layer-name">Attention</span><span class="layer-status">Full replica; full seq</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">MLP / FFN</span><span class="layer-status">Full replica; full seq</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">LayerNorm</span><span class="layer-status">Full replica; full seq</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">Params</span><span class="layer-status">Replicated on all GPUs</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">Gradients</span><span class="layer-status">All-reduced (replicated)</span></div>
+      <div class="layer-cell comm"><span class="layer-name">Optim State</span><span class="layer-status">Sharded — each rank updates & stores only its 1/N shard</span></div>
+    </div>
+  </div>
+  <div class="scope-bar">
+    <span class="scope-label">SCOPE</span>
+    <div class="scope-right">
+      <div class="scope-pips"><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip"></div></div>
+      <span class="scope-range">Same as DP — intra to multi-node. No extra scope constraints.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ ZERO-2 ═══════ -->
+<div class="card" style="--card-accent:var(--c-optim)">
+  <div class="card-header"><div class="card-title">ZeRO Stage 2</div><div class="card-abbr">ZeRO-2</div></div>
+  <div class="dimension-tags">
+    <span class="dim-tag" style="color:var(--c-batch);border-color:color-mix(in srgb,var(--c-batch) 35%,transparent);background:color-mix(in srgb,var(--c-batch) 10%,transparent);">Batch / Sample</span>
+    <span class="dim-tag" style="color:var(--c-optim);border-color:color-mix(in srgb,var(--c-optim) 35%,transparent);background:color-mix(in srgb,var(--c-optim) 10%,transparent);">Optimizer State</span>
+    <span class="dim-tag" style="color:var(--c-weight);border-color:color-mix(in srgb,var(--c-weight) 35%,transparent);background:color-mix(in srgb,var(--c-weight) 10%,transparent);">Gradients</span>
+  </div>
+  <p class="desc">Extends ZeRO-1 by also sharding gradients. Each DP rank retains only the gradient shard needed for its optimizer update; the rest is freed after reduce-scatter.</p>
+  <div class="props">
+    <div class="prop-row"><span class="prop-label">Splits</span><span class="prop-val">Optimizer states + gradients across DP ranks</span></div>
+    <div class="prop-row"><span class="prop-label">Memory ↓</span><span class="prop-val good">~8× vs full DP (optim state + gradient sharding)</span></div>
+    <div class="prop-row"><span class="prop-label">Comm.</span><span class="prop-val">Reduce-scatter grads (instead of all-reduce)</span></div>
+    <div class="prop-row"><span class="prop-label">Bottleneck</span><span class="prop-val bad">Parameters still replicated on every GPU</span></div>
+  </div>
+  <div class="layer-section">
+    <div class="layer-section-title">Layer-level behaviour</div>
+    <div class="layer-grid">
+      <div class="layer-cell neutral"><span class="layer-name">Attention</span><span class="layer-status">Full replica; full seq</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">MLP / FFN</span><span class="layer-status">Full replica; full seq</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">LayerNorm</span><span class="layer-status">Full replica; full seq</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">Params</span><span class="layer-status">Still replicated on all GPUs</span></div>
+      <div class="layer-cell comm"><span class="layer-name">Gradients</span><span class="layer-status">Reduce-scatter; rank keeps only its own shard after backward</span></div>
+      <div class="layer-cell comm"><span class="layer-name">Optim State</span><span class="layer-status">Sharded — each rank owns & updates 1/N shard</span></div>
+    </div>
+  </div>
+  <div class="scope-bar">
+    <span class="scope-label">SCOPE</span>
+    <div class="scope-right">
+      <div class="scope-pips"><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip"></div></div>
+      <span class="scope-range">Same as DP — multi-node friendly. Slightly more comm. than ZeRO-1 but comparable scale.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ ZERO-3 ═══════ -->
+<div class="card" style="--card-accent:var(--c-optim)">
+  <div class="card-header"><div class="card-title">ZeRO Stage 3</div><div class="card-abbr">ZeRO-3 / FSDP</div></div>
+  <div class="dimension-tags">
+    <span class="dim-tag" style="color:var(--c-batch);border-color:color-mix(in srgb,var(--c-batch) 35%,transparent);background:color-mix(in srgb,var(--c-batch) 10%,transparent);">Batch / Sample</span>
+    <span class="dim-tag" style="color:var(--c-optim);border-color:color-mix(in srgb,var(--c-optim) 35%,transparent);background:color-mix(in srgb,var(--c-optim) 10%,transparent);">Optimizer State</span>
+    <span class="dim-tag" style="color:var(--c-weight);border-color:color-mix(in srgb,var(--c-weight) 35%,transparent);background:color-mix(in srgb,var(--c-weight) 10%,transparent);">Weights + Gradients</span>
+  </div>
+  <p class="desc">Shards optimizer states, gradients, AND model parameters across all DP ranks. Parameters are all-gathered on-the-fly just before each layer's forward/backward, then immediately discarded.</p>
+  <div class="props">
+    <div class="prop-row"><span class="prop-label">Splits</span><span class="prop-val">Params + grads + optim — everything sharded across DP ranks</span></div>
+    <div class="prop-row"><span class="prop-label">Memory ↓</span><span class="prop-val good">Linear: model memory ÷ N GPUs + small working set</span></div>
+    <div class="prop-row"><span class="prop-label">Comm.</span><span class="prop-val bad">All-gather before every layer fwd; reduce-scatter after bwd</span></div>
+    <div class="prop-row"><span class="prop-label">Best for</span><span class="prop-val">Models far larger than a single GPU's VRAM</span></div>
+  </div>
+  <div class="layer-section">
+    <div class="layer-section-title">Layer-level behaviour — all-gather/reduce-scatter wraps every layer</div>
+    <div class="layer-grid">
+      <div class="layer-cell comm"><span class="layer-name">Attention</span><span class="layer-status">All-gather weights before fwd; reduce-scatter grads after bwd</span></div>
+      <div class="layer-cell comm"><span class="layer-name">MLP / FFN</span><span class="layer-status">All-gather weights before fwd; reduce-scatter grads after bwd</span></div>
+      <div class="layer-cell comm"><span class="layer-name">LayerNorm</span><span class="layer-status">All-gather weights before fwd; reduce-scatter grads after bwd</span></div>
+      <div class="layer-cell comm"><span class="layer-name">Embedding</span><span class="layer-status">All-gather weights before use</span></div>
+      <div class="layer-cell comm"><span class="layer-name">Gradients</span><span class="layer-status">Reduce-scatter immediately after each layer backward</span></div>
+      <div class="layer-cell comm"><span class="layer-name">Optim State</span><span class="layer-status">Each rank updates only its own param shard</span></div>
+    </div>
+  </div>
+  <div class="scope-bar">
+    <span class="scope-label">SCOPE</span>
+    <div class="scope-right">
+      <div class="scope-pips"><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div></div>
+      <span class="scope-range">Multi-node (64–1000s GPUs). High comm. overhead; best with InfiniBand. Often paired with PP to reduce all-gather frequency.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ TENSOR PARALLELISM ═══════ -->
+<div class="card" style="--card-accent:var(--c-tensor)">
+  <div class="card-header"><div class="card-title">Tensor Parallelism</div><div class="card-abbr">TP</div></div>
+  <div class="dimension-tags">
+    <span class="dim-tag" style="color:var(--c-tensor);border-color:color-mix(in srgb,var(--c-tensor) 35%,transparent);background:color-mix(in srgb,var(--c-tensor) 10%,transparent);">Tensor Width (Hidden Dim)</span>
+    <span class="dim-tag" style="color:var(--c-weight);border-color:color-mix(in srgb,var(--c-weight) 35%,transparent);background:color-mix(in srgb,var(--c-weight) 10%,transparent);">Model Weights</span>
+  </div>
+  <p class="desc">Splits individual weight matrices column/row-wise across GPUs within a node. Each GPU holds a shard of every layer's weights (not full layers), computes partial results, then all-reduces to produce the full output.</p>
+  <div class="props">
+    <div class="prop-row"><span class="prop-label">Splits</span><span class="prop-val">Weight matrices along hidden dim within each layer</span></div>
+    <div class="prop-row"><span class="prop-label">Comm.</span><span class="prop-val bad">All-reduce after every fwd and bwd op — very high frequency</span></div>
+    <div class="prop-row"><span class="prop-label">Requires</span><span class="prop-val">Fast NVLink / NVSwitch intra-node bandwidth</span></div>
+    <div class="prop-row"><span class="prop-label">Best for</span><span class="prop-val">Very wide models; always confined to one node</span></div>
+  </div>
+  <div class="layer-section">
+    <div class="layer-section-title">Layer-level behaviour — hidden dim split; no sequence split here</div>
+    <div class="layer-grid">
+      <div class="layer-cell comm"><span class="layer-name">QKV Proj</span><span class="layer-status">Column-split across TP ranks; all-reduce output</span></div>
+      <div class="layer-cell comm"><span class="layer-name">Out Proj</span><span class="layer-status">Row-split; all-reduce merges partial sums → full hidden</span></div>
+      <div class="layer-cell comm"><span class="layer-name">MLP up/gate</span><span class="layer-status">Column-split; each GPU computes partial hidden</span></div>
+      <div class="layer-cell comm"><span class="layer-name">MLP down</span><span class="layer-status">Row-split; all-reduce → full hidden dim output</span></div>
+      <div class="layer-cell neutral" style="grid-column:span 2"><span class="layer-name">LayerNorm / Dropout</span><span class="layer-status">NOT split by TP — full hidden on each GPU. SP fills this gap (see SP card).</span></div>
+    </div>
+  </div>
+  <div class="scope-bar">
+    <span class="scope-label">SCOPE</span>
+    <div class="scope-right">
+      <div class="scope-pips"><div class="pip active"></div><div class="pip active"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div></div>
+      <span class="scope-range">Strictly intra-node (2–8 GPUs). High-freq all-reduce is prohibitively slow over InfiniBand; NVLink mandatory.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ SEQUENCE PARALLELISM ═══════ -->
+<div class="card" style="--card-accent:var(--c-seq)">
+  <div class="card-header"><div class="card-title">Sequence Parallelism</div><div class="card-abbr">SP</div></div>
+  <div class="dimension-tags">
+    <span class="dim-tag" style="color:var(--c-seq);border-color:color-mix(in srgb,var(--c-seq) 35%,transparent);background:color-mix(in srgb,var(--c-seq) 10%,transparent);">Sequence Length (Activations)</span>
+  </div>
+  <p class="desc">Companion to TP. Splits the sequence dimension in the regions where TP does NOT split activations — LayerNorm, Dropout, and the residual stream — eliminating redundant activation copies across the TP group.</p>
+  <div class="props">
+    <div class="prop-row"><span class="prop-label">Splits</span><span class="prop-val">Sequence dim of activations in non-TP regions (LN, Dropout)</span></div>
+    <div class="prop-row"><span class="prop-label">Memory ↓</span><span class="prop-val good">Activation memory ÷ TP degree for LN/Dropout/residual</span></div>
+    <div class="prop-row"><span class="prop-label">Comm.</span><span class="prop-val">All-gather entering TP region; reduce-scatter leaving it</span></div>
+    <div class="prop-row"><span class="prop-label">Note</span><span class="prop-val">Always paired with TP; SP degree always equals TP degree</span></div>
+  </div>
+  <div class="layer-section">
+    <div class="layer-section-title">Layer-level behaviour — SP only splits where TP does not</div>
+    <div class="layer-grid">
+      <div class="layer-cell neutral" style="grid-column:span 3"><span class="layer-name">Attention + MLP (TP region)</span><span class="layer-status">Hidden dim split by TP here. SP does NOT add a seq split — instead all-gather from SP state on entry into this region, reduce-scatter on exit.</span></div>
+      <div class="layer-cell comm"><span class="layer-name">LayerNorm</span><span class="layer-status">Seq split: each GPU owns seq/TP tokens</span></div>
+      <div class="layer-cell comm"><span class="layer-name">Dropout</span><span class="layer-status">Seq split: each GPU owns seq/TP tokens</span></div>
+      <div class="layer-cell comm"><span class="layer-name">Residual stream</span><span class="layer-status">Seq split; reduce-scatter on exit from TP block</span></div>
+    </div>
+  </div>
+  <div class="scope-bar">
+    <span class="scope-label">SCOPE</span>
+    <div class="scope-right">
+      <div class="scope-pips"><div class="pip active"></div><div class="pip active"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div></div>
+      <span class="scope-range">Intra-node only (same GPUs as TP). SP degree = TP degree; inherits TP's NVLink requirement.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ CONTEXT PARALLELISM ═══════ -->
+<div class="card" style="--card-accent:var(--c-weight)">
+  <div class="card-header"><div class="card-title">Context Parallelism</div><div class="card-abbr">CP</div></div>
+  <div class="dimension-tags">
+    <span class="dim-tag" style="color:var(--c-seq);border-color:color-mix(in srgb,var(--c-seq) 35%,transparent);background:color-mix(in srgb,var(--c-seq) 10%,transparent);">Sequence Length (Long Context)</span>
+  </div>
+  <p class="desc">Partitions the full input sequence across GPUs for very long contexts (128k+ tokens). Each GPU owns a token chunk and processes it through <strong style="color:var(--c-seq)">every layer</strong> — MLP, LN, residual are all purely local. Only attention requires cross-GPU communication to exchange K/V across chunks via a ring all-to-all.</p>
+  <div class="props">
+    <div class="prop-row"><span class="prop-label">Splits</span><span class="prop-val">Token sequence — each GPU sees seq_len / CP tokens throughout the whole model</span></div>
+    <div class="prop-row"><span class="prop-label">Memory ↓</span><span class="prop-val good">KV cache + ALL activations (MLP, LN, residual…) scale with seq_len / CP</span></div>
+    <div class="prop-row"><span class="prop-label">Comm.</span><span class="prop-val">Ring all-to-all for K/V at attention only — all other layers: zero extra comm</span></div>
+    <div class="prop-row"><span class="prop-label">Causal LM ⚠</span><span class="prop-val bad">Contiguous chunks cause load imbalance. Use interleaved / striped chunking (e.g. Llama 3 style) to distribute causal work evenly.</span></div>
+  </div>
+  <div class="layer-section">
+    <div class="layer-section-title">Layer-level behaviour — seq chunk flows through EVERY layer; cross-GPU comm ONLY at attention K/V</div>
+    <div class="layer-grid">
+      <div class="layer-cell comm"><span class="layer-name">Attention</span><span class="layer-status">⚡ Ring all-to-all: each GPU iteratively sends its K/V shard around the ring (CP-1 steps) to compute full-context attention scores. This is the ONLY cross-GPU op in CP.</span></div>
+      <div class="layer-cell local"><span class="layer-name">MLP / FFN</span><span class="layer-status">✓ Purely local — FFN operates on the local token chunk only. No cross-GPU comm needed (FFN is token-independent).</span></div>
+      <div class="layer-cell local"><span class="layer-name">LayerNorm</span><span class="layer-status">✓ Purely local — statistics computed on local chunk.</span></div>
+      <div class="layer-cell local"><span class="layer-name">Dropout / Residual</span><span class="layer-status">✓ Purely local — element-wise ops on local token chunk.</span></div>
+      <div class="layer-cell local"><span class="layer-name">Embedding</span><span class="layer-status">✓ Seq split — each GPU looks up embeddings for its own token indices locally.</span></div>
+      <div class="layer-cell neutral" style="grid-column:span 2"><span class="layer-name">Causal mask (decoder)</span><span class="layer-status">Each GPU applies a local causal mask to its chunk + receives past K/V from earlier-position GPUs. Fix: interleaved/striped assignment of token positions across GPUs.</span></div>
+    </div>
+  </div>
+  <div class="scope-bar">
+    <span class="scope-label">SCOPE</span>
+    <div class="scope-right">
+      <div class="scope-pips"><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip"></div><div class="pip"></div></div>
+      <span class="scope-range">Intra- or cross-node (2–64 GPUs). Ring K/V tolerates more latency than TP all-reduce; can span nodes with sufficient BW.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ PIPELINE PARALLELISM ═══════ -->
+<div class="card" style="--card-accent:var(--c-layer)">
+  <div class="card-header"><div class="card-title">Pipeline Parallelism</div><div class="card-abbr">PP</div></div>
+  <div class="dimension-tags">
+    <span class="dim-tag" style="color:var(--c-layer);border-color:color-mix(in srgb,var(--c-layer) 35%,transparent);background:color-mix(in srgb,var(--c-layer) 10%,transparent);">Layers / Model Depth</span>
+  </div>
+  <p class="desc">Assigns consecutive groups of transformer layers to different GPU stages. Micro-batches flow through the pipeline; 1F1B scheduling minimises the idle "bubble" at stage boundaries.</p>
+  <div class="props">
+    <div class="prop-row"><span class="prop-label">Splits</span><span class="prop-val">Groups of consecutive layers across GPUs (stages)</span></div>
+    <div class="prop-row"><span class="prop-label">Memory ↓</span><span class="prop-val good">Each GPU holds only its stage's weights and activations</span></div>
+    <div class="prop-row"><span class="prop-label">Comm.</span><span class="prop-val">P2P: activations forward; gradients backward between adjacent stages</span></div>
+    <div class="prop-row"><span class="prop-label">Bottleneck</span><span class="prop-val bad">Pipeline bubble — GPU idle at batch start/end; grows with PP degree</span></div>
+  </div>
+  <div class="layer-section">
+    <div class="layer-section-title">Layer-level behaviour — each GPU owns a contiguous slice of layers</div>
+    <div class="layer-grid">
+      <div class="layer-cell neutral"><span class="layer-name">Attention</span><span class="layer-status">Local on stage's GPU; full seq processed, no seq split</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">MLP / FFN</span><span class="layer-status">Local on stage's GPU; full seq processed, no seq split</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">LayerNorm</span><span class="layer-status">Local on stage's GPU; no seq split</span></div>
+      <div class="layer-cell comm" style="grid-column:span 3"><span class="layer-name">Stage boundary (between adjacent GPUs)</span><span class="layer-status">P2P send/recv of full activation tensor fwd + gradient tensor bwd. Very small BW vs TP — works over InfiniBand or even Ethernet.</span></div>
+    </div>
+  </div>
+  <div class="scope-bar">
+    <span class="scope-label">SCOPE</span>
+    <div class="scope-right">
+      <div class="scope-pips"><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip"></div></div>
+      <span class="scope-range">Cross-node (2–N nodes, 1 stage/node typical). Only activation tensor crosses node boundaries — very low BW; ideal for slow inter-node links.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ EXPERT PARALLELISM ═══════ -->
+<div class="card" style="--card-accent:var(--c-expert)">
+  <div class="card-header"><div class="card-title">Expert Parallelism</div><div class="card-abbr">EP / MoE</div></div>
+  <div class="dimension-tags">
+    <span class="dim-tag" style="color:var(--c-expert);border-color:color-mix(in srgb,var(--c-expert) 35%,transparent);background:color-mix(in srgb,var(--c-expert) 10%,transparent);">Experts (MoE FFN)</span>
+  </div>
+  <p class="desc">Distributes MoE expert FFNs across GPUs. A learned router selects top-K experts per token; tokens are dispatched to expert GPUs via all-to-all, processed locally, then gathered back. Attention and non-MoE layers are unaffected.</p>
+  <div class="props">
+    <div class="prop-row"><span class="prop-label">Splits</span><span class="prop-val">Expert weight matrices across GPUs (≥1 expert per GPU)</span></div>
+    <div class="prop-row"><span class="prop-label">Compute ↑</span><span class="prop-val good">Total params scale without proportional FLOPs increase</span></div>
+    <div class="prop-row"><span class="prop-label">Comm.</span><span class="prop-val bad">All-to-all token dispatch + gather per MoE layer</span></div>
+    <div class="prop-row"><span class="prop-label">Risk</span><span class="prop-val bad">Load imbalance if router collapses to few popular experts</span></div>
+  </div>
+  <div class="layer-section">
+    <div class="layer-section-title">Layer-level behaviour — only MoE FFN layers are split; attention is untouched</div>
+    <div class="layer-grid">
+      <div class="layer-cell neutral"><span class="layer-name">Attention</span><span class="layer-status">NOT affected — local on each GPU, same as dense model</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">LayerNorm</span><span class="layer-status">Local on each GPU; unchanged</span></div>
+      <div class="layer-cell neutral"><span class="layer-name">Router</span><span class="layer-status">Local softmax gate selecting top-K expert indices per token</span></div>
+      <div class="layer-cell comm" style="grid-column:span 3"><span class="layer-name">Expert FFN (MoE layers only)</span><span class="layer-status">All-to-all dispatch: tokens fly to assigned expert GPU → processed locally → all-to-all gather back. Dense FFN layers (if any) remain fully local.</span></div>
+    </div>
+  </div>
+  <div class="scope-bar">
+    <span class="scope-label">SCOPE</span>
+    <div class="scope-right">
+      <div class="scope-pips"><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div><div class="pip active"></div></div>
+      <span class="scope-range">Intra- to multi-node (8–1000s GPUs). All-to-all is BW-intensive; EP group often ≤1 node to avoid slow cross-node all-to-all.</span>
+    </div>
+  </div>
+</div>
+
+</div><!-- /grid -->
+
+<!-- ═══════════════════════════════════════════
+     COMPARISON TABLE
+════════════════════════════════════════════ -->
+<div class="table-section">
+  <div class="section-title">At-a-Glance Comparison</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Technique</th>
+          <th>Primary Dimension</th>
+          <th>↓ Weight Mem</th>
+          <th>↓ Activation Mem</th>
+          <th>↓ Optim State</th>
+          <th>Layer Coverage (seq dim split)</th>
+          <th>Communication Pattern</th>
+          <th>Typical Scope</th>
+          <th>Typical Degree</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Data Parallelism (DP)</td>
+          <td>Batch</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><div class="lc-pills"><span class="lc-pill lc-none">None — full seq on every GPU</span></div></td>
+          <td>All-reduce (grads, post-step)</td>
+          <td>Intra → Multi-node</td>
+          <td>8–1000s GPUs</td>
+        </tr>
+        <tr>
+          <td>ZeRO Stage 1</td>
+          <td>Batch + Optim State</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="check">✓</span></td>
+          <td><div class="lc-pills"><span class="lc-pill lc-none">None — same as DP</span></div></td>
+          <td>Reduce-scatter optim state</td>
+          <td>Intra → Multi-node</td>
+          <td>8–1000s GPUs</td>
+        </tr>
+        <tr>
+          <td>ZeRO Stage 2</td>
+          <td>Batch + Optim + Grads</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="check">✓</span> + grads</td>
+          <td><div class="lc-pills"><span class="lc-pill lc-none">None — same as DP</span></div></td>
+          <td>Reduce-scatter grads</td>
+          <td>Intra → Multi-node</td>
+          <td>8–1000s GPUs</td>
+        </tr>
+        <tr>
+          <td>ZeRO Stage 3</td>
+          <td>Batch + All shards</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="check">✓</span></td>
+          <td><div class="lc-pills"><span class="lc-pill lc-none">None — no seq split; all-gather wraps every layer</span></div></td>
+          <td>All-gather params (each layer) + reduce-scatter grads</td>
+          <td>Multi-node (IB needed)</td>
+          <td>64–1000s GPUs</td>
+        </tr>
+        <tr>
+          <td>Tensor Parallelism (TP)</td>
+          <td>Hidden dim / width</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="partial">~</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><div class="lc-pills"><span class="lc-pill lc-comm">Attn: hidden-dim split + all-reduce</span><span class="lc-pill lc-comm">MLP: hidden-dim split + all-reduce</span><span class="lc-pill lc-none">LN / Dropout: unsplit (SP gap)</span></div></td>
+          <td>All-reduce per layer op (fwd + bwd)</td>
+          <td>Intra-node (NVLink)</td>
+          <td>2–8 GPUs</td>
+        </tr>
+        <tr>
+          <td>Sequence Parallelism (SP)</td>
+          <td>Sequence dim (activations)</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><div class="lc-pills"><span class="lc-pill lc-none">Attn / MLP: TP handles (hidden split, no seq split)</span><span class="lc-pill lc-comm">LayerNorm: seq split</span><span class="lc-pill lc-comm">Dropout: seq split</span><span class="lc-pill lc-comm">Residual: seq split</span></div></td>
+          <td>All-gather (enter TP region) / reduce-scatter (exit TP region)</td>
+          <td>Intra-node (= TP group)</td>
+          <td>2–8 GPUs (= TP degree)</td>
+        </tr>
+        <tr>
+          <td>Context Parallelism (CP)</td>
+          <td>Sequence (long context)</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="check">✓</span> (KV + all acts)</td>
+          <td><span class="cross">✗</span></td>
+          <td><div class="lc-pills"><span class="lc-pill lc-comm">Attention: seq split + ring K/V comm</span><span class="lc-pill lc-local">MLP: seq split, local only</span><span class="lc-pill lc-local">LN / Dropout: seq split, local only</span><span class="lc-pill lc-local">Embedding: seq split, local only</span></div></td>
+          <td>Ring all-to-all K/V (attention only); everything else local</td>
+          <td>Intra → Cross-node</td>
+          <td>2–64 GPUs</td>
+        </tr>
+        <tr>
+          <td>Pipeline Parallelism (PP)</td>
+          <td>Layer depth</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="partial">~</span> (micro-batch)</td>
+          <td><span class="cross">✗</span></td>
+          <td><div class="lc-pills"><span class="lc-pill lc-local">All layers: local on stage GPU, full seq, no seq split</span><span class="lc-pill lc-comm">Stage boundary: P2P activation pass</span></div></td>
+          <td>P2P activations fwd / gradients bwd between adjacent stages</td>
+          <td>Cross-node (low BW ok)</td>
+          <td>2–N nodes (1 stage/node)</td>
+        </tr>
+        <tr>
+          <td>Expert Parallelism (EP)</td>
+          <td>MoE experts</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><div class="lc-pills"><span class="lc-pill lc-none">Attention / LN: local, no split</span><span class="lc-pill lc-comm">Expert FFN (MoE layers): all-to-all token dispatch</span><span class="lc-pill lc-local">Dense FFN layers: local, unaffected</span></div></td>
+          <td>All-to-all token dispatch + gather (MoE layers only)</td>
+          <td>Intra → Multi-node</td>
+          <td>8–1000s GPUs</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     COMBINATIONS TABLE
+════════════════════════════════════════════ -->
+<div class="table-section">
+  <div class="section-title">Common Combinations (3D / 4D / 5D Parallelism)</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Combination</th>
+          <th>Why combine?</th>
+          <th>Used by</th>
+          <th>Example Scope / Config</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>DP + PP + TP</td>
+          <td>Classic 3D parallelism. TP splits width intra-node (NVLink). PP crosses nodes cheaply (P2P activations). DP multiplies throughput across node groups.</td>
+          <td>Megatron-LM, GPT-4 training</td>
+          <td>TP=8 (intra-node, NVLink) × PP=4 (cross-node P2P) × DP=N → 32N GPUs. E.g. 128 GPUs = 4 nodes × 8 GPUs, PP=4 stages.</td>
+        </tr>
+        <tr>
+          <td>TP + SP</td>
+          <td>SP fills the coverage gap TP leaves in LayerNorm/Dropout regions, eliminating redundant activation copies across the TP group at no extra GPU cost.</td>
+          <td>Megatron-LM (always paired)</td>
+          <td>Same scope as TP: 2–8 GPUs, strictly intra-node. SP adds zero extra GPUs — it's a scheduling change within the same TP group.</td>
+        </tr>
+        <tr>
+          <td>ZeRO-3 + DP</td>
+          <td>Shards all state (params, grads, optim) so the full model never lives on one GPU, while DP scales data throughput. Enables trillion-param training without model parallelism.</td>
+          <td>DeepSpeed, PyTorch FSDP</td>
+          <td>64–512 GPUs across 8–64 nodes (e.g. 512 A100s for a 70B model). InfiniBand required for all-gather; each GPU holds ~70B/512 = 137M params at rest.</td>
+        </tr>
+        <tr>
+          <td>CP + TP + SP + PP + DP</td>
+          <td>5D parallelism for ultra-long context at massive scale. CP handles KV memory growth (ring attn comm only). TP/SP handle width intra-node. PP crosses nodes cheaply. DP multiplies.</td>
+          <td>Llama 3, Mistral Large</td>
+          <td>TP=8 (intra-node) × SP (same group) × CP=4 (1–2 nodes, ring K/V) × PP=8 (cross-node P2P) × DP=N → 256N GPUs. Enables 128k+ tokens on thousands of GPUs.</td>
+        </tr>
+        <tr>
+          <td>EP + DP + TP</td>
+          <td>EP distributes expert FFNs within a node (avoids cross-node all-to-all). TP splits attention and non-expert dense layers intra-node. DP replicates node groups across the cluster.</td>
+          <td>Mixtral, DeepSeek-V2/V3, Switch Transformer</td>
+          <td>EP=8 (1 node, NVLink all-to-all) × TP=4 (same node) × DP=N → each node hosts all 8 experts; DP scales across N node groups. Cross-node all-to-all avoided entirely.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     PER-LAYER BREAKDOWN TABLE
+════════════════════════════════════════════ -->
+<div class="table-section">
+  <div class="section-title">Per-Layer Breakdown — What each technique does to each layer</div>
+  <p style="font-size:0.72rem;color:var(--muted);margin-bottom:14px;font-family:'Space Mono',monospace;">
+    <span class="lc-pill lc-local" style="margin-right:8px;">LOCAL</span>sequence chunk processed locally, no cross-GPU comm
+    <span class="lc-pill lc-comm" style="margin-left:10px;margin-right:8px;">COMM</span>cross-GPU communication required at this layer
+    <span class="lc-pill lc-none" style="margin-left:10px;margin-right:8px;">FULL</span>full tensor on this GPU, no split
+    <span class="lc-pill lc-none" style="margin-left:10px;">—</span>not applicable / no change
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Layer / Component</th>
+          <th style="color:var(--c-batch)">DP / ZeRO-1/2/3</th>
+          <th style="color:var(--c-tensor)">TP</th>
+          <th style="color:var(--c-seq)">SP</th>
+          <th style="color:var(--c-weight)">CP</th>
+          <th style="color:var(--c-layer)">PP</th>
+          <th style="color:var(--c-expert)">EP (MoE)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Attention (QKV proj)</strong></td>
+          <td><span style="color:var(--muted)">FULL — replicated weights; full seq</span></td>
+          <td><span style="color:var(--c-seq)">COMM — column-split; all-reduce output</span></td>
+          <td><span style="color:var(--muted)">— (TP handles this region)</span></td>
+          <td><span style="color:var(--c-seq)">COMM — ring K/V all-to-all across CP ranks</span></td>
+          <td><span style="color:var(--muted)">FULL — local to stage</span></td>
+          <td><span style="color:var(--muted)">FULL — attention unchanged by EP</span></td>
+        </tr>
+        <tr>
+          <td><strong>Attention (Out proj)</strong></td>
+          <td><span style="color:var(--muted)">FULL — replicated</span></td>
+          <td><span style="color:var(--c-seq)">COMM — row-split; all-reduce merges partial</span></td>
+          <td><span style="color:var(--muted)">— (TP region; reduce-scatter on exit)</span></td>
+          <td><span style="color:var(--c-optim)">LOCAL — applied to local chunk result</span></td>
+          <td><span style="color:var(--muted)">FULL — local to stage</span></td>
+          <td><span style="color:var(--muted)">FULL — unchanged</span></td>
+        </tr>
+        <tr>
+          <td><strong>MLP / FFN (dense)</strong></td>
+          <td><span style="color:var(--muted)">FULL — replicated weights; full seq</span></td>
+          <td><span style="color:var(--c-seq)">COMM — col+row split; all-reduce at down proj</span></td>
+          <td><span style="color:var(--muted)">— (TP region)</span></td>
+          <td><span style="color:var(--c-optim)">LOCAL — each GPU runs FFN on its token chunk (token-independent)</span></td>
+          <td><span style="color:var(--muted)">FULL — local to stage</span></td>
+          <td><span style="color:var(--muted)">FULL — dense FFN layers unaffected</span></td>
+        </tr>
+        <tr>
+          <td><strong>MLP / FFN (MoE experts)</strong></td>
+          <td><span style="color:var(--muted)">FULL — replicated</span></td>
+          <td><span style="color:var(--muted)">— (EP usually replaces TP for experts)</span></td>
+          <td><span style="color:var(--muted)">—</span></td>
+          <td><span style="color:var(--c-optim)">LOCAL — expert compute on dispatched token chunk</span></td>
+          <td><span style="color:var(--muted)">Local to stage</span></td>
+          <td><span style="color:var(--c-seq)">COMM — all-to-all dispatch tokens to expert GPU → process → all-to-all gather back</span></td>
+        </tr>
+        <tr>
+          <td><strong>LayerNorm</strong></td>
+          <td><span style="color:var(--muted)">FULL — replicated; full seq</span></td>
+          <td><span style="color:var(--muted)">FULL on each GPU (TP doesn't split LN) ← the gap SP fills</span></td>
+          <td><span style="color:var(--c-optim)">LOCAL — seq/TP tokens per GPU; all-gather on entry into TP block</span></td>
+          <td><span style="color:var(--c-optim)">LOCAL — on local token chunk only</span></td>
+          <td><span style="color:var(--muted)">FULL — local to stage</span></td>
+          <td><span style="color:var(--muted)">FULL — unchanged</span></td>
+        </tr>
+        <tr>
+          <td><strong>Dropout / Residual</strong></td>
+          <td><span style="color:var(--muted)">FULL — replicated</span></td>
+          <td><span style="color:var(--muted)">FULL on each GPU ← gap SP fills</span></td>
+          <td><span style="color:var(--c-optim)">LOCAL — seq/TP tokens; reduce-scatter on exit from TP block</span></td>
+          <td><span style="color:var(--c-optim)">LOCAL — element-wise on local chunk</span></td>
+          <td><span style="color:var(--muted)">FULL — local to stage</span></td>
+          <td><span style="color:var(--muted)">FULL — unchanged</span></td>
+        </tr>
+        <tr>
+          <td><strong>Embedding lookup</strong></td>
+          <td><span style="color:var(--muted)">FULL — replicated</span></td>
+          <td><span style="color:var(--c-seq)">COMM — vocab-parallel embedding; all-reduce needed</span></td>
+          <td><span style="color:var(--muted)">—</span></td>
+          <td><span style="color:var(--c-optim)">LOCAL — each GPU looks up its own token slice</span></td>
+          <td><span style="color:var(--muted)">Stage 0 only</span></td>
+          <td><span style="color:var(--muted)">FULL — unchanged</span></td>
+        </tr>
+        <tr>
+          <td><strong>Parameters (weight storage)</strong></td>
+          <td><span style="color:var(--muted)">ZeRO-1/2: replicated · ZeRO-3: sharded (all-gather on demand)</span></td>
+          <td><span style="color:var(--muted)">Shard of each weight matrix (hidden/TP)</span></td>
+          <td><span style="color:var(--muted)">Same as TP (SP adds no new weight split)</span></td>
+          <td><span style="color:var(--muted)">FULL replica of model on each CP rank</span></td>
+          <td><span style="color:var(--muted)">Only stage's layers stored on each GPU</span></td>
+          <td><span style="color:var(--muted)">Each GPU holds only its assigned expert weights</span></td>
+        </tr>
+        <tr>
+          <td><strong>Gradients</strong></td>
+          <td><span style="color:var(--c-seq)">ZeRO-1: all-reduce · ZeRO-2/3: reduce-scatter (sharded)</span></td>
+          <td><span style="color:var(--c-seq)">All-reduce of weight gradients (same as fwd)</span></td>
+          <td><span style="color:var(--muted)">Same as TP</span></td>
+          <td><span style="color:var(--muted)">Full grad on each CP rank (no grad sharding)</span></td>
+          <td><span style="color:var(--c-seq)">P2P gradient tensors backward through stages</span></td>
+          <td><span style="color:var(--c-seq)">All-to-all grad gather back to originating GPU</span></td>
+        </tr>
+        <tr>
+          <td><strong>Optimizer state</strong></td>
+          <td><span style="color:var(--muted)">ZeRO-1/2/3: sharded across DP ranks · vanilla DP: replicated</span></td>
+          <td><span style="color:var(--muted)">Local to each TP rank's weight shard</span></td>
+          <td><span style="color:var(--muted)">Same as TP</span></td>
+          <td><span style="color:var(--muted)">Replicated (CP doesn't shard weights)</span></td>
+          <td><span style="color:var(--muted)">Local to each stage</span></td>
+          <td><span style="color:var(--muted)">Local to each expert's GPU</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  document.querySelector('.theme-toggle').addEventListener('click', () => {
+    const html = document.documentElement;
+    html.dataset.theme = html.dataset.theme === 'light' ? 'dark' : 'light';
+  });
+</script>
+</body>
+</html>
