@@ -1,7 +1,9 @@
 Page 1: GPU Hardware & Memory Hierarchy
+
 Covers: Tensor Cores, Streaming Multiprocessors, NVLink/NVSwitch, memory tiers (HBM → L2 → shared → registers). Central dimension: where data lives and how fast it moves.
 
 Page 2: CUDA Execution Model
+
 Covers: Threads/Warps/Blocks/Grids, occupancy, warp efficiency, instruction-level parallelism. Central dimension: how work is mapped onto GPU compute resources.
 
 Page 3: GPU Memory Access Patterns
