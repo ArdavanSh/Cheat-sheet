@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GPU Hardware & Memory Hierarchy Cheat Sheet</title>
+<style>
+  :root {
+    --bg: #f4f5fa; --surface: #fff; --surface2: #f0f1f8; --border: #dde0f0;
+    --accent1: #6a58e8; --accent2: #0398c8; --accent3: #e03070; --accent4: #3a9a3e;
+    --accent5: #d08000; --accent6: #0096a8; --accent7: #9040b8;
+    --text: #1a1d2e; --text-dim: #5a6080; --text-dimmer: #9ba0bc;
+    --tag-bg: #eef0fb; --tag-border: #c8ccec; --card-header: #eaecf9;
+    --table-head: #eef0f9; --table-alt: #f6f7fc; --highlight: rgba(106,88,232,0.07);
+  }
+  .dark {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #222637; --border: #2e3248;
+    --accent1: #7c6af7; --accent2: #4fc3f7; --accent3: #f06292; --accent4: #66bb6a;
+    --accent5: #ffa726; --accent6: #26c6da; --accent7: #ce93d8;
+    --text: #e8eaf6; --text-dim: #8891b8; --text-dimmer: #555d7a;
+    --tag-bg: #1e2236; --tag-border: #2e3a5c; --card-header: #151829;
+    --table-head: #1c2035; --table-alt: #191d2e; --highlight: rgba(124,106,247,0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+  code { font-family: 'Consolas','Fira Code',monospace; font-size:.75em; background:var(--surface2); padding:1px 5px; border-radius:3px; color:var(--accent2); }
+
+  .topbar { position:sticky; top:0; z-index:100; background:var(--surface); border-bottom:1px solid var(--border); padding:14px 28px; display:flex; align-items:center; justify-content:space-between; }
+  .topbar-title { font-size:1.05rem; font-weight:700; }
+  .topbar-sub { font-size:.78rem; color:var(--text-dim); margin-top:1px; }
+  .theme-btn { background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:5px 14px; cursor:pointer; font-size:.8rem; color:var(--text-dim); }
+
+  .filter-bar { display:flex; flex-wrap:wrap; gap:8px; padding:12px 28px; background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:57px; z-index:99; }
+  .pill { font-size:.72rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; padding:5px 14px; border-radius:20px; border:1px solid var(--border); cursor:pointer; background:var(--tag-bg); color:var(--text-dim); transition:all .15s; }
+  .pill:hover, .pill.active { border-color:var(--accent1); color:var(--accent1); background:var(--highlight); }
+
+  .main { padding:28px; max-width:1700px; margin:0 auto; }
+  .sec-label { font-size:.68rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--text-dimmer); margin-bottom:14px; display:flex; align-items:center; gap:10px; }
+  .sec-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(390px,1fr)); gap:18px; margin-bottom:36px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; transition:border-color .2s; }
+  .card:hover { border-color:var(--accent1); }
+  .card-wide { grid-column:1 / -1; }
+
+  .ch { background:var(--card-header); border-bottom:1px solid var(--border); padding:14px 18px 12px; }
+  .ch-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .cn { font-size:1.05rem; font-weight:700; }
+  .abbr { font-size:.72rem; font-weight:700; letter-spacing:.06em; color:#fff; padding:3px 9px; border-radius:5px; white-space:nowrap; margin-top:2px; }
+  .dtags { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+  .dtag { font-size:.68rem; font-weight:600; letter-spacing:.05em; text-transform:uppercase; padding:3px 9px; border-radius:4px; border:1px solid var(--tag-border); background:var(--tag-bg); color:var(--text-dim); }
+  .cdesc { font-size:.82rem; color:var(--text-dim); margin-top:10px; line-height:1.55; }
+
+  .cb { padding:14px 18px; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin-bottom:12px; }
+  .kk { font-size:.72rem; font-weight:700; color:var(--text-dimmer); text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; padding-top:1px; }
+  .kv2 { font-size:.82rem; }
+  .good { color:var(--accent4); } .warn { color:var(--accent5); } .bad { color:var(--accent3); } .info { color:var(--accent2); } .ultra { color:var(--accent7); }
+
+  hr.div { border:none; border-top:1px solid var(--border); margin:12px 0; }
+  .sublbl { font-size:.68rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dimmer); margin-bottom:7px; }
+  .clist { display:flex; flex-direction:column; gap:5px; }
+  .crow { display:grid; grid-template-columns:145px 1fr; gap:8px; align-items:start; }
+  .cname { font-size:.75rem; font-weight:600; color:var(--text-dim); }
+  .cdsc { font-size:.78rem; }
+
+  .scope { margin-top:12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:9px 13px; font-size:.78rem; color:var(--text-dim); }
+  .scope.hl { border-color:rgba(240,98,146,.4); }
+  .scope.ul { border-color:rgba(206,147,216,.4); }
+  .slbl { font-size:.65rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dimmer); margin-bottom:3px; }
+
+  .nb { display:inline-block; font-size:.6rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; padding:2px 7px; border-radius:4px; margin-left:5px; vertical-align:middle; }
+  .nb-new { background:rgba(240,98,146,.15); border:1px solid rgba(240,98,146,.4); color:var(--accent3); }
+  .nb-blk { background:rgba(124,106,247,.15); border:1px solid rgba(124,106,247,.4); color:var(--accent1); }
+  .nb-ult { background:rgba(206,147,216,.15); border:1px solid rgba(206,147,216,.4); color:var(--accent7); }
+
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:.78rem; }
+  thead tr { background:var(--table-head); }
+  thead th { text-align:left; padding:8px 12px; font-size:.68rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-dim); border-bottom:1px solid var(--border); white-space:nowrap; }
+  tbody tr:nth-child(even) { background:var(--table-alt); }
+  tbody tr:hover { background:var(--highlight); }
+  tbody td { padding:8px 12px; border-bottom:1px solid rgba(46,50,72,.4); vertical-align:top; }
+  tbody td:first-child { font-weight:600; }
+  .tf { color:var(--accent4); font-weight:600; } .tm { color:var(--accent5); font-weight:600; } .ts { color:var(--accent3); font-weight:600; }
+  .ti { color:var(--accent2); } .td { color:var(--text-dim); }
+  tr.rblk { background:rgba(124,106,247,.08) !important; }
+  tr.rult { background:rgba(206,147,216,.08) !important; }
+
+  .nbadge { display:inline-block; font-size:.7rem; font-weight:700; padding:1px 7px; border-radius:4px; background:var(--surface2); border:1px solid var(--border); color:var(--text-dim); }
+  .nbadge.f { background:rgba(102,187,106,.15); border-color:rgba(102,187,106,.35); color:var(--accent4); }
+  .nbadge.m { background:rgba(255,167,38,.15); border-color:rgba(255,167,38,.35); color:var(--accent5); }
+  .nbadge.s { background:rgba(240,98,146,.15); border-color:rgba(240,98,146,.35); color:var(--accent3); }
+
+  .legend { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+  .li { display:flex; align-items:center; gap:5px; font-size:.72rem; color:var(--text-dim); }
+  .ld { width:10px; height:10px; border-radius:2px; }
+
+  @media(max-width:800px){ .grid{grid-template-columns:1fr;} .main{padding:14px;} }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-title">GPU Hardware &amp; Memory Hierarchy</div>
+    <div class="topbar-sub">Cheat Sheet — Compute · Memory · Bandwidth · Latency · Capacity · Interconnects · Architecture</div>
+  </div>
+  <button class="theme-btn" id="theme-toggle" onclick="
+    const b=document.body;
+    const isDark=b.classList.toggle('dark');
+    document.getElementById('theme-toggle').textContent=isDark?'☀️ Light':'🌙 Dark';
+    document.getElementById('gpu-canvas').dataset.dark=isDark?'1':'';
+  ">🌙 Dark</button>
+</div>
+
+<div class="filter-bar">
+  <span class="pill active" data-t="all">All</span>
+  <span class="pill" data-t="compute">Compute</span>
+  <span class="pill" data-t="memory">Memory</span>
+  <span class="pill" data-t="interconnect">Interconnect</span>
+  <span class="pill" data-t="architecture">Architecture</span>
+</div>
+
+<div class="main">
+
+<!-- ════════════ SUPERCHIP VISUALIZATION ════════════ -->
+<div class="sec-label">Grace Blackwell Superchip — GB300 System View</div>
+<div class="grid" style="margin-bottom:36px">
+<div class="card card-wide" data-tags="architecture blackwell interconnect">
+  <div class="ch">
+    <div class="ch-top"><div class="cn">GB300 Superchip — Interactive System Layout <span class="nb nb-ult">Blackwell Ultra</span></div><div class="abbr" style="background:linear-gradient(135deg,#26c6da,#7c6af7)">SYS</div></div>
+    <div class="dtags"><span class="dtag">Architecture</span><span class="dtag">Superchip</span><span class="dtag">Interactive</span></div>
+    <p class="cdesc">One GB300 Superchip: 1 Grace CPU + 2 B300 GPUs connected via NVLink-C2C at 900 GB/s each. Each B300 is a <strong>dual-die</strong> GPU — two dies linked internally by NV-HBI at 10 TB/s, appearing as one device to software. 36 superchips form one NVL72 rack. Hover any block for specs.</p>
+  </div>
+  <div class="cb" style="padding:0">
+    <div id="sc-viz" style="position:relative; width:100%; user-select:none; overflow:hidden;">
+      <canvas id="sc-canvas" style="display:block; width:100%;"></canvas>
+      <div id="sc-tooltip" style="
+        position:absolute; pointer-events:none; opacity:0; transition:opacity .15s;
+        background:var(--surface); border:1px solid var(--border); border-radius:8px;
+        padding:11px 15px; max-width:280px; z-index:10;
+        box-shadow:0 8px 32px rgba(0,0,0,.18);
+      ">
+        <div id="sc-tt-title" style="font-size:.82rem; font-weight:700; margin-bottom:5px; color:var(--text); letter-spacing:.02em;"></div>
+        <div id="sc-tt-body" style="font-size:.72rem; color:var(--text-dim); line-height:1.6;"></div>
+      </div>
+    </div>
+    <div id="sc-legend" style="
+      display:flex; gap:12px; flex-wrap:wrap; justify-content:center;
+      border-top:1px solid var(--border);
+      padding:10px 16px 12px;
+      background:var(--card-header);
+    "></div>
+  </div>
+</div>
+</div>
+
+<style>#sc-viz { cursor:default; }</style>
+
+<script>
+(function(){
+  const canvas = document.getElementById('sc-canvas');
+  const ctx    = canvas.getContext('2d');
+  const viz    = document.getElementById('sc-viz');
+  const tooltip= document.getElementById('sc-tooltip');
+  const ttTitle= document.getElementById('sc-tt-title');
+  const ttBody = document.getElementById('sc-tt-body');
+  const legend = document.getElementById('sc-legend');
+
+  function isDark() { return document.body.classList.contains('dark'); }
+
+  function palette() {
+    const dark = isDark();
+    return {
+      canvasBg:   dark ? '#070a12' : '#e8ecf8',
+      pkgBg:      dark ? '#0c1020' : '#d4daf0',
+      pkgBorder:  dark ? '#3050a0' : '#5568b8',
+      pkgTitle:   dark ? '#6878c8' : '#2a3a90',
+      // Grace CPU — teal/cyan
+      graceFill:  dark ? '#0a2830' : '#80d8e8',
+      graceHov:   dark ? '#104048' : '#50c8e0',
+      graceBorder:dark ? '#20a0c0' : '#0888a8',
+      // GPU — blue/indigo
+      gpuFill:    dark ? '#101840' : '#a0b0f0',
+      gpuHov:     dark ? '#1a2860' : '#7090e8',
+      gpuBorder:  dark ? '#4060d0' : '#2848c8',
+      // SM grid inside GPU
+      smFill:     dark ? '#1a2e6a' : '#a8bef8',
+      smBorder:   dark ? '#4060b0' : '#3858c0',
+      // HBM bars inside GPU
+      hbmFill:    dark ? '#3a1010' : '#f0a0a0',
+      hbmBorder:  dark ? '#c03030' : '#c01818',
+      // NVLink-C2C link
+      c2cFill:    dark ? '#082840' : '#80ccf0',
+      c2cHov:     dark ? '#103c60' : '#40aaec',
+      c2cBorder:  dark ? '#2090d0' : '#0868b8',
+      c2cParticle:dark ? [40,180,240] : [8,104,184],
+      c2cLabel:   dark ? '#60c0f0' : '#0858a0',
+      // NVLink 5 external
+      nvFill:     dark ? '#082840' : '#80ccf0',
+      nvHov:      dark ? '#103c60' : '#40aaec',
+      nvBorder:   dark ? '#2090d0' : '#0868b8',
+      // LPDDR5X
+      dramFill:   dark ? '#182018' : '#a8dda8',
+      dramBorder: dark ? '#30a040' : '#2a8830',
+      // CX8 NIC
+      nicFill:    dark ? '#281828' : '#d8b0e0',
+      nicHov:     dark ? '#402840' : '#c890d8',
+      nicBorder:  dark ? '#9050b0' : '#7030a0',
+      // IB fabric
+      ibFill:     dark ? '#201810' : '#e8d0a0',
+      ibHov:      dark ? '#382818' : '#e0b868',
+      ibBorder:   dark ? '#c09000' : '#a07000',
+      // Text
+      blockLbl:   dark ? '#d0daf8' : '#0a1848',
+      blockLblHov:dark ? '#ffffff' : '#ffffff',
+      dimLbl:     dark ? '#607098' : '#4060a0',
+      legendTxt:  dark ? '#9098c8' : '#2a3a80',
+    };
+  }
+
+  const COMP = {
+    grace:  { title:'Grace CPU — Arm Neoverse V2',
+              body:'72 Arm Neoverse V2 cores\n480 GB LPDDR5X · 512 GB/s\nNVLink-C2C: 900 GB/s to each GPU\nGB300: 2 MB L2/core (fixed from GB200 1 MB)\nUnified memory: CPU+GPU share address space\nUsed for: ZeRO offload, KV overflow, preprocessing' },
+    gpu:    { title:'B300 GPU — Blackwell Ultra (Dual-Die)',
+              body:'Dual-die package: 2 dies connected via NV-HBI at 10 TB/s\nEach die: 80 SMs · 320 Tensor Cores (5th-gen)\n288 GB HBM3e total · 8 TB/s\n15 PFLOPS NVFP4 dense · 5 PFLOPS FP8 dense\nTMEM: 256 KB/SM accumulator store\n192 MB L2 cache shared across both dies (3.8× H100)\nNVLink 5: 1,800 GB/s to fabric\nOS sees it as a single GPU device' },
+    c2c:    { title:'NVLink-C2C — CPU↔GPU Coherent Link',
+              body:'900 GB/s bidirectional per link\n7× faster than PCIe 5 x16\nFull cache coherence — unified address space\nZero-copy buffer passing CPU↔GPU\nTwo C2C links per superchip (one per GPU)\nEliminates PCIe bottleneck entirely' },
+    nvlink: { title:'NVLink 5 — GPU-to-GPU Fabric',
+              body:'1,800 GB/s bidirectional per GPU\nConnects to NVSwitch fabric\nNVL72: 130 TB/s any-to-any across 72 GPUs\n~1 μs latency within domain\nEnables TP, SP, EP, ZeRO-3 all-gather' },
+    dram:   { title:'LPDDR5X — Grace CPU Memory',
+              body:'480 GB per Grace CPU\n512 GB/s bandwidth\nNVL72 total: 36 × 480 GB = 17 TB\nUsed for: ZeRO-Infinity offload,\nKV cache overflow, dataset staging\nAccessible from GPU at 900 GB/s via C2C' },
+    nic:    { title:'CX8 NIC — Network Interface',
+              body:'ConnectX-8 with external PCIe switch\nDirect RDMA path to GPU HBM\nFixes GB200 CX7 latency regression\nIB NDR 800: ~100 GB/s per port\nGPUDirect RDMA: GPU↔NIC without CPU\nCritical for multi-node EP and DP' },
+    ib:     { title:'InfiniBand / RoCE — Cross-Node Fabric',
+              body:'NDR 800: ~100 GB/s per port\n~18× slower than NVLink 5\nPP and DP tolerate IB latency\nTP and EP must stay within NVLink domain\nMultiple NICs per superchip for bandwidth' },
+  };
+
+  let hovered = null, hitR = [], dpr = 1, W, H, rafId;
+
+  function buildLegend() {
+    legend.innerHTML = '';
+    const dark = isDark();
+    const items = [
+      ['grace','Grace CPU','#20a0c0','#0888a8'],
+      ['gpu','B300 GPU','#4060d0','#2848c8'],
+      ['c2c','NVLink-C2C','#2090d0','#0868b8'],
+      ['nvlink','NVLink 5','#2090d0','#0868b8'],
+      ['dram','LPDDR5X','#30a040','#2a8830'],
+      ['nic','CX8 NIC','#9050b0','#7030a0'],
+      ['ib','IB Fabric','#c09000','#a07000'],
+    ];
+    items.forEach(([k,lbl,dc,lc]) => {
+      const el = document.createElement('div');
+      el.style.cssText = `display:flex;align-items:center;gap:5px;font-size:.65rem;font-weight:600;color:${dark?'#9098c8':'#1a2a70'};white-space:nowrap`;
+      el.innerHTML = `<div style="width:10px;height:10px;border-radius:2px;background:${dark?dc:lc};flex-shrink:0;border:1px solid rgba(0,0,0,.15)"></div>${lbl}`;
+      legend.appendChild(el);
+    });
+  }
+
+  function resize() {
+    cancelAnimationFrame(rafId);
+    dpr = window.devicePixelRatio || 1;
+    W = viz.clientWidth;
+    H = Math.max(340, Math.min(460, W * 0.32));
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.scale(dpr, dpr);
+    buildLegend();
+    loop();
+  }
+
+  function rr(x,y,w,h,r=3) {
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+    ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r);
+    ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h);
+    ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r);
+    ctx.quadraticCurveTo(x,y,x+r,y);
+    ctx.closePath();
+  }
+
+  function blk(x,y,w,h,fill,hov,border,lbl,lblCol,isHov,r=4) {
+    rr(x,y,w,h,r);
+    ctx.fillStyle = isHov ? hov : fill;
+    ctx.fill();
+    ctx.strokeStyle = border;
+    ctx.lineWidth = isHov ? 2 : 1;
+    ctx.stroke();
+    if (isHov) {
+      ctx.save(); ctx.shadowColor = border; ctx.shadowBlur = 14;
+      rr(x,y,w,h,r); ctx.stroke(); ctx.restore();
+    }
+    if (lbl && w > 16 && h > 10) {
+      const fs = Math.min(11, Math.max(6, Math.min(w,h)*0.18));
+      ctx.fillStyle = lblCol;
+      ctx.font = `700 ${fs}px Consolas,monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      // Multi-line support
+      const lines = lbl.split('\n');
+      const lh = fs * 1.3;
+      const startY = y + h/2 - (lines.length-1)*lh/2;
+      lines.forEach((line,i) => ctx.fillText(line, x+w/2, startY + i*lh));
+    }
+  }
+
+  function txt(x,y,s,col,size=8,align='center') {
+    ctx.fillStyle = col;
+    ctx.font = `600 ${size}px "Segoe UI",sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = 'middle';
+    ctx.fillText(s,x,y);
+  }
+
+  function drawParticles(now, x1, y1, x2, y2, color, count, speed) {
+    const [cr,cg,cb] = color;
+    for (let i = 0; i < count; i++) {
+      const t = ((now/speed + i/count) % 1);
+      const px = x1 + (x2-x1)*t;
+      const py = y1 + (y2-y1)*t;
+      const alpha = Math.sin(t*Math.PI) * 0.7;
+      ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha})`;
+      ctx.beginPath();
+      ctx.arc(px, py, 2.2, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function draw(now) {
+    const P = palette();
+    ctx.clearRect(0,0,W,H);
+    hitR = [];
+
+    ctx.fillStyle = P.canvasBg;
+    ctx.fillRect(0,0,W,H);
+
+    const PAD = 16;
+    const totalW = W - PAD*2;
+    const totalH = H - PAD*2;
+
+    // Layout: GPU1 — C2C — Grace — C2C — GPU2
+    const c2cW   = Math.max(24, totalW * 0.032);
+    const graceW = totalW * 0.17;
+    const gpuW   = (totalW - graceW - c2cW*2 - 8) / 2;
+    const topY   = PAD + 16;
+    const mainH  = totalH - 52;
+
+    const gpu1X  = PAD;
+    const c2c1X  = gpu1X + gpuW + 2;
+    const graceX = c2c1X + c2cW + 2;
+    const c2c2X  = graceX + graceW + 2;
+    const gpu2X  = c2c2X + c2cW + 2;
+
+    // ── Title ──
+    txt(W/2, PAD + 6, 'GB300 Superchip  ·  2 B300 + 1 Grace  ·  NVL72 = 36 × this', P.pkgTitle, Math.min(10, W*0.0065));
+
+    // ── Superchip package outline ──
+    rr(PAD-2, topY-4, totalW+4, mainH+8, 8);
+    ctx.strokeStyle = P.pkgBorder;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6,4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ── Grace CPU (center) ──
+    const graceY = topY;
+    const graceH = mainH;
+    const isGH = hovered?.key==='grace';
+    blk(graceX, graceY, graceW, graceH, P.graceFill, P.graceHov, P.graceBorder,
+        'Grace CPU\n72 Arm cores\n480 GB LPDDR5X', isGH ? P.blockLblHov : P.blockLbl, isGH, 6);
+    hitR.push({x:graceX, y:graceY, w:graceW, h:graceH, key:'grace'});
+
+    // LPDDR5X bars at top and bottom of Grace
+    const dramBarH = Math.max(8, graceH * 0.07);
+    const isDH = hovered?.key==='dram';
+    blk(graceX+4, graceY+4, graceW-8, dramBarH, P.dramFill, P.dramFill, P.dramBorder, '', '', false, 2);
+    hitR.push({x:graceX+4, y:graceY+4, w:graceW-8, h:dramBarH, key:'dram'});
+    blk(graceX+4, graceY+graceH-dramBarH-4, graceW-8, dramBarH, P.dramFill, P.dramFill, P.dramBorder, '', '', false, 2);
+    hitR.push({x:graceX+4, y:graceY+graceH-dramBarH-4, w:graceW-8, h:dramBarH, key:'dram'});
+
+    // ── GPUs (2×) ──
+    const gpuPositions = [gpu1X, gpu2X];
+
+    for (let g = 0; g < 2; g++) {
+      const gpuXactual = gpuPositions[g];
+      const gpuY = topY;
+      const gpuH = mainH;
+      const isGPU = hovered?.key==='gpu' && hovered.i===g;
+
+      // GPU body
+      blk(gpuXactual, gpuY, gpuW, gpuH, P.gpuFill, P.gpuHov, P.gpuBorder, '', '', isGPU, 6);
+      hitR.push({x:gpuXactual, y:gpuY, w:gpuW, h:gpuH, key:'gpu', i:g});
+
+      // GPU package label at top
+      txt(gpuXactual + gpuW/2, gpuY + 10, `B300 GPU ${g+1}  ·  Dual-Die  ·  160 SMs  ·  288 GB HBM3e`, isGPU ? P.blockLblHov : P.blockLbl, Math.min(7.5, gpuW*0.028));
+
+      // ── Dual-die layout: Die0 | NV-HBI | Die1 stacked vertically ──
+      const outerPad = 5;
+      const hbiH = Math.max(10, gpuH * 0.07);       // NV-HBI strip height
+      const nvBarH = 16;                              // NVLink bar at bottom
+      const labelH = 18;                              // top label space
+      const totalDieArea = gpuH - labelH - hbiH - nvBarH - outerPad;
+      const dieH = totalDieArea / 2;
+      const die0Y = gpuY + labelH;
+      const hbiY  = die0Y + dieH;
+      const die1Y = hbiY + hbiH;
+
+      const hbmBarW = Math.max(8, gpuW * 0.07);
+      const diePad  = 4;
+      const smAreaX = gpuXactual + diePad;
+      const smAreaW = gpuW - diePad*2 - hbmBarW - 3;
+
+      // Draw each die
+      for (let d = 0; d < 2; d++) {
+        const dY = d === 0 ? die0Y : die1Y;
+        // Die box
+        rr(gpuXactual + 2, dY, gpuW - 4, dieH, 4);
+        ctx.fillStyle = isDark() ? '#111830' : '#8fabf5';
+        ctx.fill();
+        ctx.strokeStyle = isDark() ? '#3858c8' : '#2040b8';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Die label
+        ctx.fillStyle = isDark() ? 'rgba(180,200,255,0.7)' : 'rgba(20,50,160,0.55)';
+        ctx.font = `700 ${Math.max(5, Math.min(7, gpuW*0.026))}px Consolas,monospace`;
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(`Die ${d}  ·  80 SMs`, gpuXactual + diePad + 2, dY + 7);
+
+        // SM mini-grid inside this die
+        const smInnerY = dY + 13;
+        const smInnerH = dieH - 15;
+        const smCols = 8, smRows = 2;
+        const smGap = 1.5;
+        const smW = (smAreaW - smGap*(smCols-1)) / smCols;
+        const smH = (smInnerH - smGap*(smRows-1)) / smRows;
+        for (let r = 0; r < smRows; r++) {
+          for (let c = 0; c < smCols; c++) {
+            const sx = smAreaX + c*(smW+smGap);
+            const sy = smInnerY + r*(smH+smGap);
+            rr(sx, sy, smW, smH, 2);
+            ctx.fillStyle = P.smFill;
+            ctx.fill();
+            ctx.strokeStyle = P.smBorder;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+
+        // HBM stacks (3 per die) on right edge
+        const hbmX = gpuXactual + gpuW - hbmBarW - 3;
+        const hbmCount = 3;
+        const hbmGap = 3;
+        const hbmEach = (dieH - hbmGap*(hbmCount-1) - 6) / hbmCount;
+        for (let h = 0; h < hbmCount; h++) {
+          const hy = dY + 3 + h*(hbmEach+hbmGap);
+          rr(hbmX, hy, hbmBarW, hbmEach, 2);
+          ctx.fillStyle = P.hbmFill;
+          ctx.fill();
+          ctx.strokeStyle = P.hbmBorder;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+
+      // ── NV-HBI strip between dies ──
+      const hbiColor   = isDark() ? '#1a3050' : '#60b0e8';
+      const hbiBorder  = isDark() ? '#3090d0' : '#0870c0';
+      const hbiLblCol  = isDark() ? '#60d0f8' : '#0858a0';
+      rr(gpuXactual + 4, hbiY, gpuW - 8, hbiH, 3);
+      ctx.fillStyle = hbiColor;
+      ctx.fill();
+      ctx.strokeStyle = hbiBorder;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      // Animated particles flowing across NV-HBI
+      drawParticles(now, gpuXactual + 8, hbiY + hbiH/2, gpuXactual + gpuW - 8, hbiY + hbiH/2,
+                    isDark() ? [40,200,250] : [8,100,200], 7, 600);
+      ctx.fillStyle = hbiLblCol;
+      ctx.font = `700 ${Math.max(5.5, Math.min(7.5, gpuW*0.027))}px Consolas,monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('NV-HBI  ·  10 TB/s', gpuXactual + gpuW/2, hbiY + hbiH/2);
+
+      // NVLink 5 bar at bottom of GPU
+      const nvY = gpuY + gpuH - 16;
+      const nvH2 = 12;
+      const isNV = hovered?.key==='nvlink' && hovered.i===g;
+      blk(gpuXactual+4, nvY, gpuW-8, nvH2, P.nvFill, P.nvHov, P.nvBorder,
+          'NVLink 5 · 1800 GB/s → NVSwitch', isNV ? P.blockLblHov : P.blockLbl, isNV, 3);
+      hitR.push({x:gpuXactual+4, y:nvY, w:gpuW-8, h:nvH2, key:'nvlink', i:g});
+
+      // ── NVLink-C2C bridge between Grace and this GPU ──
+      const c2cX = g === 0 ? c2c1X : c2c2X;
+      const c2cY = topY + mainH * 0.15;
+      const c2cH = mainH * 0.7;
+      const isC2C = hovered?.key==='c2c' && hovered.i===g;
+
+      rr(c2cX, c2cY, c2cW, c2cH, 3);
+      ctx.fillStyle = isC2C ? P.c2cHov : P.c2cFill;
+      ctx.fill();
+      ctx.strokeStyle = P.c2cBorder;
+      ctx.lineWidth = isC2C ? 2 : 1;
+      ctx.stroke();
+      hitR.push({x:c2cX, y:c2cY, w:c2cW, h:c2cH, key:'c2c', i:g});
+
+      // C2C animated particles
+      drawParticles(now, c2cX+c2cW/2, c2cY+4, c2cX+c2cW/2, c2cY+c2cH-4, P.c2cParticle, 6, 800);
+
+      // C2C label
+      ctx.save();
+      ctx.translate(c2cX + c2cW/2, c2cY + c2cH/2);
+      ctx.rotate(-Math.PI/2);
+      ctx.fillStyle = P.c2cLabel;
+      ctx.font = '700 6.5px Consolas,monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('C2C · 900 GB/s', 0, 0);
+      ctx.restore();
+    }
+
+    // ── CX8 NIC + IB below superchip ──
+    const extY = topY + mainH + 14;
+    const extH = 18;
+
+    // NIC blocks under each GPU
+    const gpuXs = [gpu1X, gpu2X];
+    for (let g = 0; g < 2; g++) {
+      const nicW2 = gpuW * 0.4;
+      const nicX = gpuXs[g] + gpuW/2 - nicW2/2;
+      const isNIC = hovered?.key==='nic';
+      blk(nicX, extY, nicW2, extH, P.nicFill, P.nicHov, P.nicBorder,
+          'CX8 NIC', isNIC ? P.blockLblHov : P.blockLbl, isNIC, 3);
+      hitR.push({x:nicX, y:extY, w:nicW2, h:extH, key:'nic', i:g});
+    }
+
+    // IB fabric bar spanning full width at very bottom
+    const ibY = extY + extH + 5;
+    const ibH = 14;
+    const isIB = hovered?.key==='ib';
+    blk(PAD, ibY, totalW, ibH, P.ibFill, P.ibHov, P.ibBorder,
+        'InfiniBand / RoCE  ·  NDR 800  ·  → Other Nodes', isIB ? P.blockLblHov : P.blockLbl, isIB, 3);
+    hitR.push({x:PAD, y:ibY, w:totalW, h:ibH, key:'ib'});
+
+    // Dashed lines from NIC to IB
+    ctx.setLineDash([3,3]);
+    ctx.strokeStyle = P.nicBorder;
+    ctx.lineWidth = 1;
+    for (let g = 0; g < 2; g++) {
+      const cx = gpuXs[g] + gpuW/2;
+      ctx.beginPath(); ctx.moveTo(cx, extY+extH); ctx.lineTo(cx, ibY); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  function loop() {
+    rafId = requestAnimationFrame(t => {
+      ctx.save(); draw(t); ctx.restore();
+      loop();
+    });
+  }
+
+  function getPos(e) {
+    const rect=canvas.getBoundingClientRect(), t=e.touches?e.touches[0]:e;
+    return {x:t.clientX-rect.left, y:t.clientY-rect.top};
+  }
+  function findHit(mx,my) {
+    for (let i=hitR.length-1;i>=0;i--) {
+      const r=hitR[i];
+      if(mx>=r.x&&mx<=r.x+r.w&&my>=r.y&&my<=r.y+r.h) return r;
+    }
+    return null;
+  }
+  function showTip(hit, mx, my) {
+    const c=COMP[hit.key];
+    ttTitle.textContent=c.title;
+    ttBody.style.whiteSpace='pre-line';
+    ttBody.textContent=c.body;
+    const vr=viz.getBoundingClientRect();
+    let tx=mx+14, ty=my+14;
+    if(tx+290>vr.width-8) tx=mx-300;
+    if(ty+210>vr.height-8) ty=my-220;
+    if(ty<8) ty=8;
+    tooltip.style.left=tx+'px'; tooltip.style.top=ty+'px'; tooltip.style.opacity='1';
+  }
+  canvas.addEventListener('mousemove', e=>{
+    const {x,y}=getPos(e), hit=findHit(x,y);
+    hovered=hit||null;
+    canvas.style.cursor=hit?'pointer':'default';
+    if(hit) showTip(hit,x,y); else tooltip.style.opacity='0';
+  });
+  canvas.addEventListener('mouseleave',()=>{ hovered=null; tooltip.style.opacity='0'; });
+  canvas.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    const {x,y}=getPos(e), hit=findHit(x,y);
+    hovered=hit||null;
+    if(hit) showTip(hit,x,y); else tooltip.style.opacity='0';
+  },{passive:false});
+
+  const themeBtn = document.getElementById('theme-toggle');
+  if (themeBtn) themeBtn.addEventListener('click', () => { buildLegend(); });
+
+  buildLegend();
+  resize();
+  window.addEventListener('resize', resize);
+})();
+</script>
+
+
+<!-- ════════════ GPU DIE VISUALIZATION ════════════ -->
+<div class="sec-label">GPU Die Visualization — Blackwell Ultra B300</div>
+<div class="grid" style="margin-bottom:36px">
+<div class="card card-wide" data-tags="architecture blackwell compute memory interconnect">
+  <div class="ch">
+    <div class="ch-top"><div class="cn">B300 Die Map — Interactive Hardware Layout <span class="nb nb-ult">Blackwell Ultra</span></div><div class="abbr" style="background:linear-gradient(135deg,#ce93d8,#7c6af7)">DIE</div></div>
+    <div class="dtags"><span class="dtag">Architecture</span><span class="dtag">Blackwell Ultra</span><span class="dtag">Interactive</span></div>
+    <p class="cdesc">Schematic floorplan of the Blackwell Ultra B300 dual-die GPU. Based on NVIDIA's official die diagram. Each die has 80 SMs across 4 GPCs, with L2 cache partitions distributed across the die (192 MB total, 4 partitions per die), 6 HBM3e stacks on the outer edge, and a GigaThread Engine (housing work scheduling, MIG partitioning, RAS reliability, and DE hardware decompression). NVLink 5 and PCIe Gen 6 pads sit on the package perimeter. L1 cache is unified with SMEM inside each SM (228 KB on SM100). Hover any block to see specs.</p>
+  </div>
+  <div class="cb" style="padding:0">
+    <div id="gpu-viz" style="position:relative; width:100%; user-select:none; overflow:hidden;">
+      <canvas id="gpu-canvas" style="display:block; width:100%;"></canvas>
+      <div id="gpu-tooltip" style="
+        position:absolute; pointer-events:none; opacity:0; transition:opacity .15s;
+        background:var(--surface); border:1px solid var(--border); border-radius:8px;
+        padding:11px 15px; max-width:270px; z-index:10;
+        box-shadow:0 8px 32px rgba(0,0,0,.18);
+      ">
+        <div id="tt-title" style="font-size:.82rem; font-weight:700; margin-bottom:5px; color:var(--text); letter-spacing:.02em;"></div>
+        <div id="tt-body" style="font-size:.72rem; color:var(--text-dim); line-height:1.6;"></div>
+      </div>
+    </div>
+    <!-- Legend lives outside canvas so it never overlaps -->
+    <div id="gpu-legend" style="
+      display:flex; gap:12px; flex-wrap:wrap; justify-content:center;
+      border-top:1px solid var(--border);
+      padding:10px 16px 12px;
+      background:var(--card-header);
+    "></div>
+  </div>
+</div>
+</div>
+
+<style>#gpu-viz { cursor:default; }</style>
+
+<script>
+(function(){
+  const canvas = document.getElementById('gpu-canvas');
+  const ctx    = canvas.getContext('2d');
+  const viz    = document.getElementById('gpu-viz');
+  const tooltip= document.getElementById('gpu-tooltip');
+  const ttTitle= document.getElementById('tt-title');
+  const ttBody = document.getElementById('tt-body');
+  const legend = document.getElementById('gpu-legend');
+
+  // ── Theme-aware palette: returns current colors based on body.dark ──
+  function isDark() { return document.body.classList.contains('dark'); }
+
+  function palette() {
+    const dark = isDark();
+    return {
+      canvasBg:  dark ? '#070a12' : '#e8ecf8',
+      dieBg:     dark ? '#0d1220' : '#d0d8f0',
+      dieBorder: dark ? '#344080' : '#5568b8',
+      dieTitle:  dark ? '#6878c8' : '#2a3a90',
+      // SM — blue
+      smFill:    dark ? '#1a2e6a' : '#a8bef8',
+      smHov:     dark ? '#2a4498' : '#7898f0',
+      smBorder:  dark ? '#5878e0' : '#2848c8',
+      // L2 — green
+      l2Fill:    dark ? '#0e3018' : '#88dd88',
+      l2Hov:     dark ? '#185028' : '#50c050',
+      l2Border:  dark ? '#30a040' : '#1a8028',
+      // HBM — red/coral
+      hbmFill:   dark ? '#4a1010' : '#f8a0a0',
+      hbmHov:    dark ? '#701818' : '#f06060',
+      hbmBorder: dark ? '#d03030' : '#c01818',
+      // GTE — amber/gold
+      gteFill:   dark ? '#382800' : '#fde080',
+      gteHov:    dark ? '#503c00' : '#f8c820',
+      gteBorder: dark ? '#c09000' : '#a07000',
+      // NVLink — cyan/teal
+      nvFill:    dark ? '#082840' : '#80ccf0',
+      nvHov:     dark ? '#103c60' : '#40aaec',
+      nvBorder:  dark ? '#2090d0' : '#0868b8',
+      // PCIe — steel blue-grey
+      pcieFill:  dark ? '#101828' : '#b8cce0',
+      pcieHov:   dark ? '#1a2840' : '#88aad0',
+      pcieBorder:dark ? '#3060a0' : '#2050a0',
+      // NV-HBI — indigo
+      hbiFill:   dark ? '#0c0c30' : '#c0c8f8',
+      hbiHov:    dark ? '#181848' : '#9098f0',
+      hbiBorder: dark ? '#6060e0' : '#3838d0',
+      hbiParticle: dark ? [110,100,255] : [40,40,210],
+      hbiLabel:  dark ? '#8080e8' : '#2828a8',
+      // Sub-units inside SM
+      tcFill:    dark ? '#7040e8' : '#7040e8',   // vivid purple — same both modes
+      tcHov:     dark ? '#a060ff' : '#a060ff',
+      tmemFill:  dark ? '#e03060' : '#e03060',   // vivid crimson — same both modes
+      tmemHov:   dark ? '#ff5090' : '#ff5090',
+      l1Fill:    dark ? '#10b870' : '#10b870',   // vivid emerald — same both modes
+      l1Hov:     dark ? '#30e898' : '#30e898',
+      // Text on blocks
+      blockLbl:    dark ? '#d0daf8' : '#0a1848',
+      blockLblHov: dark ? '#ffffff' : '#ffffff',
+      legendTxt:   dark ? '#9098c8' : '#2a3a80',
+    };
+  }
+
+  const COMP = {
+    sm:     { leg: () => isDark() ? '#5878e0' : '#2848c8',
+              title:'Streaming Multiprocessor (SM)',
+              body:'160 SMs total · 80 per die · 4 GPCs/die\n128 CUDA Cores (unified FP32/INT32)\n4 × 5th-gen Tensor Cores\n256 KB Registers · 256 KB TMEM\n228 KB L1+SMEM (SM100/B300) · 128 KB on SM120\n4 Warp Schedulers · 64 warps/SM' },
+    l1smem: { leg: () => '#10b870',
+              title:'L1 Cache / Shared Memory (inside SM)',
+              body:'Unified L1+Texture cache + SMEM per SM\n228 KB on SM100 (B300/GB300) · 128 KB on SM120 (consumer)\nSMEM carveout: up to 227 KB (runtime-configurable, SM100)\n~19 TB/s bandwidth · ~20–30 cycle latency\nSMEM: programmer-managed scratchpad (tile staging)\nDistinct from TMEM — handles general data only' },
+    tmem:   { leg: () => '#e03060',
+              title:'Tensor Memory (TMEM) — New in Blackwell',
+              body:'256 KB per SM · programmer-managed\n16 TB/s read · 8 TB/s write per SM\nStores MMA accumulator (matrix D) only\nFrees register file from accumulator duty\nAdditive bandwidth with SMEM\ntcgen05.alloc / .ld / .st / .dealloc' },
+    tc:     { leg: () => '#7040e8',
+              title:'5th-Gen Tensor Cores (inside SM)',
+              body:'4 per SM · 640 total on B300\ntcgen05 / UMMA — single-thread async\nFormats: NVFP4 · FP6 · FP8 · FP16 · BF16 · TF32\nAccumulator written to TMEM, not registers\nCTA Pair: 2 adjacent SMs cooperate on 1 MMA\n2nd-gen Transformer Engine auto scaling' },
+    l2:     { leg: () => isDark() ? '#30a040' : '#1a8028',
+              title:'L2 Cache (shared, coherent across both dies)',
+              body:'192 MB total · 8 partitions (4 per die)\nFully coherent across dies via NV-HBI\n~12 TB/s aggregate bandwidth\n100–200 cycle latency · 3.8× larger than H100\nAll 160 SMs share one unified L2 domain\ncudaAccessPropertyPersisting to pin hot lines\nCompensates for smaller per-SM L1/SMEM' },
+    hbm:    { leg: () => isDark() ? '#d03030' : '#c01818',
+              title:'HBM3e Stack',
+              body:'12 stacks total · 6 per die (outer edge)\n288 GB total capacity (B300 Ultra)\n8 TB/s peak bandwidth total\nEach stack: 24 GB · ~667 GB/s · 1024-bit interface\n~700–1000 cycle latency\nECC: single-bit correct + double-bit detect' },
+    gte:    { leg: () => isDark() ? '#c09000' : '#a07000',
+              title:'GigaThread Engine + MIG + RAS + DE',
+              body:'Top-level work distributor per die\nSchedules thread blocks → GPCs → SMs\nMIG: Multi-Instance GPU partitioning\nRAS: predictive failure, SM row remapping\nDE: HW decompression — LZ4/Snappy/Zstd/ANS\n  up to 539 GB/s; effective HBM BW up to 3×\nOne GTE per die; coordinate via NV-HBI' },
+    nvlink: { leg: () => isDark() ? '#2090d0' : '#0868b8',
+              title:'NVLink 5 I/O Pads (package perimeter)',
+              body:'1,800 GB/s bidirectional per GPU\n2× faster than NVLink 4 (H100: 900 GB/s)\nNVL72: 130 TB/s any-to-any 72-GPU fabric\nNVLink-C2C: 900 GB/s coherent CPU↔GPU\nUp to 576 GPUs in one NVLink domain\n~1 μs any-to-any latency' },
+    pcie:   { leg: () => isDark() ? '#3060a0' : '#2050a0',
+              title:'PCIe Gen 6 Interface (package edge)',
+              body:'256 GB/s bidirectional (x16)\nHost CPU ↔ GPU management & data path\nGrace Blackwell uses NVLink-C2C instead\nGB300 fix: CX8 + external PCIe sw for direct RDMA' },
+    nvhbi:  { leg: () => isDark() ? '#6060e0' : '#3838d0',
+              title:'NV-HBI — Die-to-Die Interconnect',
+              body:'~10 TB/s coherent die-to-die bandwidth\nFull L2 cache coherence across both dies\nConnects 2 reticle-limited dies (~850 mm² each)\n208B transistors total across both dies\nSW sees 1 CUDA device — no code changes needed' },
+  };
+
+  let hovered = null, hitR = [], dpr = 1, W, H, rafId;
+
+  function buildLegend() {
+    legend.innerHTML = '';
+    const dark = isDark();
+    [
+      ['sm','SM'], ['l1smem','L1 / SMEM'], ['tmem','TMEM'], ['tc','Tensor Cores'],
+      ['l2','L2 Cache'], ['hbm','HBM3e'], ['gte','GigaThread + RAS + DE'],
+      ['nvlink','NVLink 5'], ['pcie','PCIe 6'], ['nvhbi','NV-HBI']
+    ].forEach(([k,lbl]) => {
+      const el = document.createElement('div');
+      el.style.cssText = `display:flex;align-items:center;gap:5px;font-size:.65rem;font-weight:600;color:${dark?'#9098c8':'#1a2a70'};white-space:nowrap`;
+      el.innerHTML = `<div style="width:10px;height:10px;border-radius:2px;background:${COMP[k].leg()};flex-shrink:0;border:1px solid rgba(0,0,0,.15)"></div>${lbl}`;
+      legend.appendChild(el);
+    });
+  }
+
+  function resize() {
+    cancelAnimationFrame(rafId);
+    dpr = window.devicePixelRatio || 1;
+    W = viz.clientWidth;
+    // Canvas = die area + bottom pad bar only (legend is outside canvas now)
+    H = Math.max(500, Math.min(660, W * 0.44));
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.scale(dpr, dpr);
+    buildLegend();
+    loop();
+  }
+
+  function rr(x,y,w,h,r=3) {
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+    ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r);
+    ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h);
+    ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r);
+    ctx.quadraticCurveTo(x,y,x+r,y);
+    ctx.closePath();
+  }
+
+  function block(x,y,w,h,fill,hov,border,lbl,lblCol,isHov,r=3) {
+    rr(x,y,w,h,r);
+    ctx.fillStyle = isHov ? hov : fill;
+    ctx.fill();
+    ctx.strokeStyle = border;
+    ctx.lineWidth = isHov ? 1.8 : 0.9;
+    ctx.stroke();
+    if (isHov) {
+      ctx.save(); ctx.shadowColor = border; ctx.shadowBlur = 12;
+      rr(x,y,w,h,r); ctx.stroke(); ctx.restore();
+    }
+    if (lbl && w > 16 && h > 10) {
+      const fs = Math.min(9.5, Math.max(5.5, Math.min(w,h)*0.27));
+      ctx.fillStyle = lblCol;
+      ctx.font = `700 ${fs}px Consolas,monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(lbl, x+w/2, y+h/2);
+    }
+  }
+
+  function txt(x,y,s,col,size=8,align='center') {
+    ctx.fillStyle = col;
+    ctx.font = `600 ${size}px "Segoe UI",sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = 'middle';
+    ctx.fillText(s,x,y);
+  }
+
+  function draw(now) {
+    const P = palette();
+    ctx.clearRect(0,0,W,H);
+    hitR = [];
+
+    // Canvas background
+    ctx.fillStyle = P.canvasBg;
+    ctx.fillRect(0,0,W,H);
+
+    const PAD    = 18;
+    const HBIW   = Math.max(28, W * 0.044);
+    const BARH   = Math.max(22, H * 0.062);  // NVLink/PCIe bar height
+    const BARG   = 8;                          // gap between die bottom and bar
+    const dieW   = (W - PAD*2 - HBIW) / 2;
+    const dieH   = H - PAD*2 - BARH - BARG - 18; // 18 = top title offset
+    const dieY   = PAD + 18;
+    const HBMW   = Math.max(20, dieW * 0.10);
+    const GTEH   = Math.max(24, dieH * 0.10);
+    const L2H    = Math.max(16, dieH * 0.075);
+    const innerW = dieW - HBMW - 8;
+
+    for (let d = 0; d < 2; d++) {
+      const dieX   = PAD + (d === 0 ? 0 : dieW + HBIW);
+      const isRight = d === 1;
+
+      // Die border
+      rr(dieX, dieY, dieW, dieH, 7);
+      ctx.fillStyle = P.dieBg; ctx.fill();
+      ctx.strokeStyle = P.dieBorder; ctx.lineWidth = 2; ctx.stroke();
+
+      txt(dieX + dieW/2, dieY + 10, `DIE ${d+1}  ·  80 SMs  ·  4 GPCs`, P.dieTitle, 8);
+
+      // HBM3e — 6 stacks, outer vertical edge
+      const hbmX = isRight ? (dieX + dieW - HBMW - 5) : (dieX + 5);
+      const hbmH_each = (dieH - GTEH - 14) / 6 - 3.5;
+      for (let i = 0; i < 6; i++) {
+        const hy = dieY + GTEH + 10 + i * (hbmH_each + 3.5);
+        const isHov = hovered?.key==='hbm' && hovered.die===d && hovered.i===i;
+        block(hbmX, hy, HBMW, hbmH_each, P.hbmFill, P.hbmHov, P.hbmBorder,
+              'HBM', isHov ? '#fff' : P.blockLbl, isHov);
+        hitR.push({x:hbmX, y:hy, w:HBMW, h:hbmH_each, key:'hbm', die:d, i});
+      }
+
+      // GTE strip — full width at top
+      const gteX = dieX + 4;
+      const gteY = dieY + 18;
+      const gteW = dieW - 8;
+      const isGTEhov = hovered?.key==='gte' && hovered.die===d;
+      block(gteX, gteY, gteW, GTEH, P.gteFill, P.gteHov, P.gteBorder,
+            'GigaThread Engine  ·  RAS  ·  DE', isGTEhov ? '#fff' : P.blockLbl, isGTEhov);
+      hitR.push({x:gteX, y:gteY, w:gteW, h:GTEH, key:'gte', die:d});
+
+      // L2 strip — below GTE, spans SM column
+      const smX = isRight ? (dieX + 5) : (dieX + HBMW + 9);
+      const l2Y = gteY + GTEH + 5;
+      const l2W = innerW - 4;
+      const isL2hov = hovered?.key==='l2' && hovered.die===d;
+      block(smX, l2Y, l2W, L2H, P.l2Fill, P.l2Hov, P.l2Border,
+            'L2 Cache  —  shared & coherent across dies', isL2hov ? '#fff' : P.blockLbl, isL2hov);
+      hitR.push({x:smX, y:l2Y, w:l2W, h:L2H, key:'l2', die:d});
+
+      // SM grid
+      const smGridY = l2Y + L2H + 5;
+      const smGridH = dieH - (smGridY - dieY) - 7;
+      const smGridW = l2W;
+      const smCols = 8, smRows = 10;
+      const smGap = 2.5;
+      const smW = (smGridW - smGap*(smCols-1)) / smCols;
+      const smH = (smGridH - smGap*(smRows-1)) / smRows;
+
+      for (let r = 0; r < smRows; r++) {
+        for (let c = 0; c < smCols; c++) {
+          const si = r*smCols + c;
+          const sx = smX + c*(smW+smGap);
+          const sy = smGridY + r*(smH+smGap);
+          const isHov = hovered?.key==='sm' && hovered.die===d && hovered.si===si;
+
+          block(sx, sy, smW, smH, P.smFill, P.smHov, P.smBorder, '', '', isHov);
+          hitR.push({x:sx, y:sy, w:smW, h:smH, key:'sm', die:d, si});
+
+          // Sub-units — only draw if SM is large enough
+          if (smW > 20 && smH > 15) {
+            // ── 4 Tensor Core squares: top-right 2×2 grid ──
+            const tcSize = Math.min(smW * 0.16, smH * 0.20, 4.5);
+            const tcGap  = 1.2;
+            const tcAreaW = tcSize*2 + tcGap;
+            const tcOffX  = smW - tcAreaW - 2.5;
+            for (let t = 0; t < 4; t++) {
+              const tcx = sx + tcOffX + (t%2)*(tcSize+tcGap);
+              const tcy = sy + 2 + Math.floor(t/2)*(tcSize+tcGap);
+              ctx.fillStyle = isHov ? P.tcHov : P.tcFill;
+              ctx.fillRect(tcx, tcy, tcSize, tcSize);
+            }
+
+            // ── TMEM bar: at the very bottom of SM ──
+            const tmH = Math.max(3, smH * 0.15);
+            ctx.fillStyle = isHov ? P.tmemHov : P.tmemFill;
+            ctx.fillRect(sx+2, sy+smH-tmH-1.5, smW-4, tmH);
+
+            // ── L1/SMEM bar: just above TMEM ──
+            const l1H = Math.max(3, smH * 0.13);
+            ctx.fillStyle = isHov ? P.l1Hov : P.l1Fill;
+            ctx.fillRect(sx+2, sy+smH-tmH-l1H-3, smW-4, l1H);
+          }
+
+          // When hovering an SM, register sub-unit hit regions
+          if (isHov && smW > 20 && smH > 15) {
+            const tcSize = Math.min(smW * 0.16, smH * 0.20, 4.5);
+            const tcGap  = 1.2;
+            const tcAreaW = tcSize*2 + tcGap;
+            const tcOffX  = smW - tcAreaW - 2.5;
+            for (let t=0;t<4;t++) {
+              hitR.push({x:sx+tcOffX+(t%2)*(tcSize+tcGap), y:sy+2+Math.floor(t/2)*(tcSize+tcGap), w:tcSize, h:tcSize, key:'tc', die:d});
+            }
+            const tmH = Math.max(3, smH*0.15);
+            hitR.push({x:sx+2, y:sy+smH-tmH-1.5, w:smW-4, h:tmH, key:'tmem', die:d});
+            const l1H = Math.max(3, smH*0.13);
+            hitR.push({x:sx+2, y:sy+smH-tmH-l1H-3, w:smW-4, h:l1H, key:'l1smem', die:d});
+          }
+        }
+      }
+    }
+
+    // ── NV-HBI bridge (center) ──
+    const hbiX   = PAD + dieW;
+    const hbiY   = dieY + dieH * 0.17;
+    const hbiH   = dieH * 0.66;
+    const isHBIhov = hovered?.key==='nvhbi';
+
+    rr(hbiX, hbiY, HBIW, hbiH, 4);
+    ctx.fillStyle = isHBIhov ? P.hbiHov : P.hbiFill;
+    ctx.fill();
+    ctx.strokeStyle = P.hbiBorder;
+    ctx.lineWidth = isHBIhov ? 2 : 1.2;
+    ctx.stroke();
+
+    // Animated particles flowing top→bottom
+    const [pr,pg,pb] = P.hbiParticle;
+    for (let i=0; i<9; i++) {
+      const t = ((now/900 + i/9) % 1);
+      const py = hbiY + t * hbiH;
+      const alpha = Math.sin(t*Math.PI) * 0.8;
+      ctx.strokeStyle = `rgba(${pr},${pg},${pb},${alpha})`;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(hbiX+2, py); ctx.lineTo(hbiX+HBIW-2, py); ctx.stroke();
+    }
+    ctx.save(); ctx.translate(hbiX+HBIW/2, hbiY+hbiH/2); ctx.rotate(-Math.PI/2);
+    ctx.fillStyle = P.hbiLabel;
+    ctx.font = '700 7.5px Consolas,monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('NV-HBI  ·  10 TB/s', 0, 0);
+    ctx.restore();
+    hitR.push({x:hbiX, y:hbiY, w:HBIW, h:hbiH, key:'nvhbi'});
+
+    // ── NVLink + PCIe pads — bottom edge, flush below dies ──
+    const nvY  = dieY + dieH + BARG;
+    const nvH  = BARH;
+    const nvLinkFrac = 0.60;
+    for (let d=0; d<2; d++) {
+      const bx   = PAD + (d===0 ? 0 : dieW + HBIW);
+      const nvW  = dieW * nvLinkFrac - 3;
+      const isNH = hovered?.key==='nvlink' && hovered.die===d;
+      block(bx, nvY, nvW, nvH, P.nvFill, P.nvHov, P.nvBorder,
+            'NVLink 5  ·  1800 GB/s', isNH ? P.blockLblHov : P.blockLbl, isNH);
+      hitR.push({x:bx, y:nvY, w:nvW, h:nvH, key:'nvlink', die:d});
+
+      const pcieX = bx + nvW + 3;
+      const pcieW = dieW - nvW - 3;
+      const isPH  = hovered?.key==='pcie' && hovered.die===d;
+      block(pcieX, nvY, pcieW, nvH, P.pcieFill, P.pcieHov, P.pcieBorder,
+            'PCIe 6', isPH ? P.blockLblHov : P.blockLbl, isPH);
+      hitR.push({x:pcieX, y:nvY, w:pcieW, h:nvH, key:'pcie', die:d});
+    }
+  }
+
+  function loop() {
+    rafId = requestAnimationFrame(t => {
+      ctx.save(); draw(t); ctx.restore();
+      loop();
+    });
+  }
+
+  function getPos(e) {
+    const rect=canvas.getBoundingClientRect(), t=e.touches?e.touches[0]:e;
+    return {x:t.clientX-rect.left, y:t.clientY-rect.top};
+  }
+  function findHit(mx,my) {
+    for (let i=hitR.length-1;i>=0;i--) {
+      const r=hitR[i];
+      if(mx>=r.x&&mx<=r.x+r.w&&my>=r.y&&my<=r.y+r.h) return r;
+    }
+    return null;
+  }
+  function showTip(hit, mx, my) {
+    const c=COMP[hit.key];
+    ttTitle.textContent=c.title;
+    ttBody.style.whiteSpace='pre-line';
+    ttBody.textContent=c.body;
+    const vr=viz.getBoundingClientRect();
+    let tx=mx+14, ty=my+14;
+    if(tx+278>vr.width-8) tx=mx-290;
+    if(ty+210>vr.height-8) ty=my-220;
+    if(ty<8) ty=8;
+    tooltip.style.left=tx+'px'; tooltip.style.top=ty+'px'; tooltip.style.opacity='1';
+  }
+  canvas.addEventListener('mousemove', e=>{
+    const {x,y}=getPos(e), hit=findHit(x,y);
+    hovered=hit||null;
+    canvas.style.cursor=hit?'pointer':'default';
+    if(hit) showTip(hit,x,y); else tooltip.style.opacity='0';
+  });
+  canvas.addEventListener('mouseleave',()=>{ hovered=null; tooltip.style.opacity='0'; });
+  canvas.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    const {x,y}=getPos(e), hit=findHit(x,y);
+    hovered=hit||null;
+    if(hit) showTip(hit,x,y); else tooltip.style.opacity='0';
+  },{passive:false});
+
+  // Rebuild legend when theme toggles
+  const themeBtn = document.getElementById('theme-toggle');
+  if (themeBtn) themeBtn.addEventListener('click', () => { buildLegend(); });
+
+  buildLegend();
+  resize();
+  window.addEventListener('resize', resize);
+})();
+</script>
+
+<!-- ════════════ COMPUTE ════════════ -->
+<div class="sec-label">Compute Units</div>
+<div class="grid">
+
+  <!-- SM -->
+  <div class="card" data-tags="compute architecture">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">Streaming Multiprocessor (SM)</div><div class="abbr" style="background:var(--accent1)">SM</div></div>
+      <div class="dtags"><span class="dtag">Compute</span><span class="dtag">Architecture</span></div>
+      <p class="cdesc">The GPU's core compute unit. Each SM has CUDA cores for scalar math, Tensor Cores for matrix math, and on-chip memory (registers, SMEM, TMEM). Kernels are distributed across SMs by the GigaThread Engine.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Count</span>          <span class="kv2">160 SMs · 80 per die (dual-die package)</span>
+        <span class="kk">CUDA Cores</span>     <span class="kv2">128 / SM — unified INT32+FP32 pipeline <span class="nb nb-blk">Blackwell</span></span>
+        <span class="kk">Tensor Cores</span>   <span class="kv2 info">4 / SM — matrix multiply-accumulate (MMA) units</span>
+        <span class="kk">Registers</span>      <span class="kv2">256 KB / SM — fastest storage, private per-thread</span>
+        <span class="kk">SMEM + L1</span>      <span class="kv2 warn">228 KB / SM (B300/GB300, SM100) — 128 KB on consumer Blackwell (SM120). CTA Pairs give ~456 KB effective across 2 SMs</span>
+        <span class="kk">TMEM</span>           <span class="kv2 good">256 KB / SM — dedicated MMA accumulator store <span class="nb nb-new">Blackwell</span></span>
+        <span class="kk">Warps</span>          <span class="kv2">64 warps/SM max (2048 threads) — GPU hides latency by switching warps</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TENSOR CORES -->
+  <div class="card" data-tags="compute blackwell architecture">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">Tensor Cores <span class="nb nb-blk">5th-gen Blackwell</span></div><div class="abbr" style="background:var(--accent3)">TC</div></div>
+      <div class="dtags"><span class="dtag">Compute</span><span class="dtag">Mixed Precision</span></div>
+      <p class="cdesc">Hardware units that perform matrix multiply-accumulate (D = A×B + C) in one clock. This is the core operation behind every transformer layer (attention QKV, FFN). All modern LLM training/inference throughput is TC-bound or HBM-bound.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">What it does</span>  <span class="kv2">D = A × B + C — one fused matrix op per cycle per TC</span>
+        <span class="kk">Formats</span>       <span class="kv2">FP16 · BF16 · TF32 · FP8 · <strong>FP4 · FP6</strong> <span class="nb nb-new">Blackwell</span></span>
+        <span class="kk">MMA instr</span>     <span class="kv2 good"><code>tcgen05</code> (UMMA) — 1 thread issues async MMA, accumulator in TMEM</span>
+        <span class="kk">CTA Pair</span>      <span class="kv2 good">2 SMs cooperate on 1 large MMA — doubles tile size <span class="nb nb-new">New</span></span>
+        <span class="kk">NVFP4</span>         <span class="kv2 good">4-bit weights with micro-block scaling (FP8 per 16 vals) — ~1.8× less memory vs FP8, ~3.5× vs FP16 <span class="nb nb-new">New</span></span>
+      </div>
+      <div class="scope hl">
+        <div class="slbl">Transformer Engine v2 (Blackwell)</div>
+        Auto-casts layers to optimal precision at runtime. TE2 adds NVFP4 with two-level scaling — ≤1% accuracy loss vs FP8 while halving memory. Applied automatically by TensorRT-LLM and NeMo.
+      </div>
+    </div>
+  </div>
+
+  <!-- WARP EXECUTION -->
+  <div class="card" data-tags="compute architecture">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">Execution Model: Grid → Blocks → Warps → Threads</div><div class="abbr" style="background:var(--accent6)">EXEC</div></div>
+      <div class="dtags"><span class="dtag">Architecture</span><span class="dtag">Compute</span></div>
+      <p class="cdesc">CUDA programs launch a grid of thread blocks. Each block runs on one SM. Threads within a block are grouped into warps of 32 — the GPU's fundamental scheduling unit. When one warp stalls (e.g. memory load), another warp executes instantly — this is how GPUs hide latency. Warps map to <strong>CUDA cores</strong> for scalar ops (FP32/INT32). On Blackwell, Tensor Core MMA uses <code>tcgen05</code> with <strong>single-thread semantics</strong> — one elected thread issues the async MMA instruction; operands live in SMEM and accumulators go directly to TMEM, freeing the register file entirely. (Hopper used <code>wgmma</code> which required a full warp group of 128 threads to cooperatively issue MMA.)</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Grid</span>        <span class="kv2">All blocks for one kernel launch — distributed across all SMs by GigaThread Engine</span>
+        <span class="kk">Cluster</span>    <span class="kv2 info">Group of blocks sharing distributed SMEM (DSMEM) across multiple SMs <span class="nb nb-blk">H100+</span></span>
+        <span class="kk">Block (CTA)</span> <span class="kv2">Up to 1024 threads — shares SMEM + barriers — lives on 1 SM</span>
+        <span class="kk">CTA Pair</span>   <span class="kv2 good">2 adjacent blocks on 2 SMs cooperate — breaks the "1 block = 1 SM" rule; shares TMEM for one large MMA <span class="nb nb-new">Blackwell</span></span>
+        <span class="kk">Warp</span>        <span class="kv2">32 threads executing in lockstep (SIMT) — zero-cost context switch on stall → dispatched to <strong>CUDA cores</strong> for scalar FP32/INT32 ops</span>
+        <span class="kk">MMA dispatch</span>  <span class="kv2 good"><strong>Single-thread semantics</strong> on Blackwell (<code>tcgen05</code>) — one elected thread issues the async MMA; all other threads in the warp proceed independently. No warp-wide sync needed. <span class="nb nb-blk">Blackwell</span> <span class="nb" style="background:rgba(90,96,128,.15);border:1px solid rgba(90,96,128,.35);color:var(--text-dim)">vs Hopper: wgmma required 128-thread warp group</span></span>
+        <span class="kk">Thread</span>      <span class="kv2">Scalar unit with private registers — smallest execution unit</span>
+      </div>
+      <hr class="div"/>
+      <div class="sublbl">Perf Metric</div>
+      <div class="kv">
+        <span class="kk">Occupancy</span>  <span class="kv2 warn">Warps resident on SM ÷ max (64). Sweet spot: 32–48 warps/SM. Too low = latency not hidden</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /compute -->
+
+
+<!-- ════════════ MEMORY ════════════ -->
+<div class="sec-label">Memory Hierarchy — Fastest → Slowest</div>
+<div class="grid">
+
+  <!-- REGISTERS -->
+  <div class="card" data-tags="memory">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">Register File</div><div class="abbr" style="background:var(--accent4)">REG</div></div>
+      <div class="dtags"><span class="dtag">Memory</span><span class="dtag">On-Chip</span></div>
+      <p class="cdesc">Fastest memory on the GPU — 1 cycle access, private to each thread. Holds local variables and intermediate values. If a kernel uses too many registers, they "spill" to slow L1/L2/HBM, killing performance. On Blackwell, TMEM handles MMA accumulators so registers are freed for other work.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Bandwidth</span>  <span class="kv2 good">~50+ TB/s effective</span>
+        <span class="kk">Latency</span>    <span class="kv2 good">1 cycle</span>
+        <span class="kk">Size</span>       <span class="kv2">256 KB / SM (65,536 × 32-bit registers)</span>
+        <span class="kk">Scope</span>      <span class="kv2">Private per thread — not shared between threads</span>
+        <span class="kk">Limit</span>      <span class="kv2 warn">255 regs/thread max — more regs per thread = fewer concurrent warps (lower occupancy)</span>
+        <span class="kk">Spill</span>      <span class="kv2 warn">Overflow goes to "local memory" which is actually L1→L2→HBM — 100–1000× slower</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SMEM -->
+  <div class="card" data-tags="memory">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">Shared Memory (SMEM) / L1 Cache</div><div class="abbr" style="background:var(--accent4)">SMEM</div></div>
+      <div class="dtags"><span class="dtag">Memory</span><span class="dtag">On-Chip</span></div>
+      <p class="cdesc">Fast on-chip scratchpad shared by all threads in a block. Used to stage data tiles loaded from HBM so both CUDA cores and Tensor Cores can access operands at high bandwidth without hitting slow DRAM. CUDA cores use SMEM for inter-thread communication, reductions, histograms, and any shared intermediate values; Tensor Cores use it to stage their A &amp; B input tiles. L1 cache shares the same physical SRAM — the split is configurable at runtime.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Bandwidth</span>    <span class="kv2 good">~19 TB/s per SM</span>
+        <span class="kk">Latency</span>      <span class="kv2 good">~20–30 cycles</span>
+        <span class="kk">Size</span>         <span class="kv2 warn">228 KB / SM (B300/GB300, SM100) — CTA Pairs share across 2 SMs → ~456 KB effective. Note: consumer Blackwell (SM120) is 128 KB/SM</span>
+        <span class="kk">Bank conflict</span><span class="kv2 warn">32 banks × 4 B — if 2 threads hit same bank, access serializes (perf killer)</span>
+        <span class="kk">TMA</span>          <span class="kv2 info">Tensor Memory Accelerator: async DMA from HBM→SMEM, no register staging <span class="nb nb-blk">H100+</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TMEM -->
+  <div class="card" data-tags="memory blackwell architecture">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">Tensor Memory (TMEM) <span class="nb nb-new">Blackwell Only</span></div><div class="abbr" style="background:var(--accent3)">TMEM</div></div>
+      <div class="dtags"><span class="dtag">Memory</span><span class="dtag">On-Chip</span><span class="dtag">Blackwell</span></div>
+      <p class="cdesc">New memory tier next to Tensor Cores, dedicated to holding MMA results (accumulator matrix D). Before Blackwell, accumulators lived in registers — consuming most of the register file and causing spills. TMEM eliminates this bottleneck: registers are freed for other work, and the next MMA can overlap with epilogue (bias, activation) in registers.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Size</span>         <span class="kv2 good">256 KB / SM — same as register file</span>
+        <span class="kk">Read BW</span>      <span class="kv2 good">16 TB/s / SM — additive with SMEM (separate bus)</span>
+        <span class="kk">Write BW</span>     <span class="kv2 good">8 TB/s / SM</span>
+        <span class="kk">Latency</span>      <span class="kv2 info">~420 cycles (still on-chip, vs ~1000c for register spill to L2)</span>
+        <span class="kk">What goes in</span><span class="kv2">D (accumulator) always in TMEM. A from TMEM or SMEM. B from SMEM.</span>
+        <span class="kk">Access</span>       <span class="kv2 warn">Programmer-managed: <code>tcgen05.alloc</code> / <code>.ld</code> / <code>.st</code> / <code>.dealloc</code></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- L2 -->
+  <div class="card" data-tags="memory blackwell">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">L2 Cache <span class="nb nb-blk">3.8× bigger on Blackwell</span></div><div class="abbr" style="background:var(--accent5)">L2</div></div>
+      <div class="dtags"><span class="dtag">Memory</span><span class="dtag">On-Chip</span></div>
+      <p class="cdesc">Hardware-managed cache shared by all SMs, sitting between on-chip memory and HBM. Every HBM access passes through L2 first. If the data is already cached, you save a ~700-cycle HBM round-trip. Blackwell's massive 192 MB L2 can hold full attention heads and small KV blocks on-chip.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Size</span>       <span class="kv2 good">192 MB · ~12 TB/s</span>
+        <span class="kk">Latency</span>    <span class="kv2 warn">~100–200 cycles (vs ~1 for regs, ~25 for SMEM, ~800 for HBM)</span>
+        <span class="kk">Scope</span>      <span class="kv2">All SMs share one unified L2 — coherent across both dies via NV-HBI</span>
+        <span class="kk">Hint API</span>   <span class="kv2 info"><code>cudaAccessPropertyPersisting</code> — tell L2 to keep specific data resident (hot weights)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- HBM -->
+  <div class="card" data-tags="memory blackwell">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">HBM — High Bandwidth Memory (VRAM)</div><div class="abbr" style="background:var(--accent3)">HBM</div></div>
+      <div class="dtags"><span class="dtag">Memory</span><span class="dtag">VRAM</span></div>
+      <p class="cdesc">The GPU's main DRAM — stacked memory chips on the package providing massive bandwidth via a wide bus (8192+ bits). All model weights, activations, KV cache, and optimizer states live here. Most LLM ops are HBM bandwidth-bound: compute finishes before the next data arrives.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Bandwidth</span>    <span class="kv2 good">8 TB/s</span>
+        <span class="kk">Capacity</span>     <span class="kv2 good">288 GB HBM3e · 12 stacks (6 per die)</span>
+        <span class="kk">Latency</span>     <span class="kv2 warn">~700–1000 cycles — this is why caching in L2/SMEM matters so much</span>
+        <span class="kk">Effective BW</span><span class="kv2 good">NVFP4 (4× fewer bytes) + HW decompression (up to 3×) → up to ~24 TB/s effective</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /memory -->
+
+
+<!-- ════════════ INTERCONNECTS ════════════ -->
+<div class="sec-label">Interconnects</div>
+<div class="grid">
+
+  <!-- NVLink -->
+  <div class="card" data-tags="interconnect blackwell">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">NVLink — GPU-to-GPU Interconnect <span class="nb nb-blk">v5 on Blackwell</span></div><div class="abbr" style="background:var(--accent2)">NVL</div></div>
+      <div class="dtags"><span class="dtag">Interconnect</span><span class="dtag">Multi-GPU</span></div>
+      <p class="cdesc">NVIDIA's proprietary high-speed link between GPUs (and CPU via C2C). Enables multi-GPU parallelism (tensor parallelism, expert parallelism) at low latency. TP and EP require NVLink-speed bandwidth — they cannot cross to InfiniBand without stalling.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">NVLink 5</span>     <span class="kv2 good">1,800 GB/s bidir per GPU <span class="nb nb-blk">Blackwell</span></span>
+        <span class="kk">NVL72 fabric</span> <span class="kv2 good">130 TB/s total — 72 GPUs all-to-all via NVSwitch</span>
+        <span class="kk">Max domain</span>   <span class="kv2 good">576 GPUs · &gt;1 PB/s aggregate (multi-rack NVLink)</span>
+        <span class="kk">NVLink-C2C</span>   <span class="kv2 good">900 GB/s coherent CPU↔GPU — replaces PCIe in Grace Blackwell</span>
+        <span class="kk">Latency</span>      <span class="kv2 good">~1 μs any-to-any within domain</span>
+        <span class="kk">Used for</span>     <span class="kv2">TP all-reduce, EP all-to-all, ZeRO-3 all-gather, sequence parallelism</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- NVSwitch -->
+  <div class="card" data-tags="interconnect blackwell">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">NVSwitch — NVLink Fabric Switch</div><div class="abbr" style="background:var(--accent2)">NVS</div></div>
+      <div class="dtags"><span class="dtag">Interconnect</span><span class="dtag">Multi-GPU</span></div>
+      <p class="cdesc">Dedicated switch chips that connect all GPUs in a full all-to-all non-blocking fabric. Without NVSwitch, GPUs would need point-to-point NVLinks (limiting topology). With it, any GPU can talk to any GPU at full speed. SHARP enables in-switch reduction — all-reduce without GPU compute.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">NVL72 fabric</span>  <span class="kv2 good">NVLink Switch sleds — 130 TB/s full non-blocking fabric</span>
+        <span class="kk">Topology</span>      <span class="kv2 good">Full all-to-all: any GPU ↔ any GPU at full NVLink speed</span>
+        <span class="kk">SHARP</span>         <span class="kv2 info">In-network all-reduce — aggregation happens inside switch, zero GPU compute used</span>
+        <span class="kk">Latency</span>       <span class="kv2 good">~1 μs any-to-any within domain</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- IB / PCIe -->
+  <div class="card" data-tags="interconnect">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">InfiniBand / RoCE — Cross-Node Fabric</div><div class="abbr" style="background:var(--accent5)">IB</div></div>
+      <div class="dtags"><span class="dtag">Interconnect</span><span class="dtag">Multi-Node</span></div>
+      <p class="cdesc">Network fabric connecting GPU nodes across a cluster. ~18× slower than NVLink, so only pipeline parallelism (small tensors) and data parallelism (infrequent syncs) can cross node boundaries. TP and EP must stay within the NVLink domain.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">NDR 800</span>      <span class="kv2 tm">~100 GB/s per port</span>
+        <span class="kk">vs NVLink</span>    <span class="kv2 warn">~18× slower — this is why TP can't cross nodes</span>
+        <span class="kk">GPUDirect</span>    <span class="kv2 info">RDMA: GPU HBM ↔ NIC directly, no CPU copy needed</span>
+        <span class="kk">GB200 issue</span> <span class="kv2 warn">CX7 NIC routes through Grace CPU → added RDMA latency <span class="nb nb-blk">Known Issue</span></span>
+        <span class="kk">GB300 fix</span>   <span class="kv2 ultra">CX8 NIC + external PCIe switch → direct GPU-to-NIC path <span class="nb nb-ult">Fixed</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- NV-HBI Dual Die -->
+  <div class="card" data-tags="interconnect architecture blackwell">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">NV-HBI — Die-to-Die Link <span class="nb nb-new">Blackwell</span></div><div class="abbr" style="background:var(--accent3)">HBI</div></div>
+      <div class="dtags"><span class="dtag">Architecture</span><span class="dtag">Blackwell</span></div>
+      <p class="cdesc">Blackwell GPUs use two separate silicon dies (each ~850 mm², the max a single chip can be). NV-HBI is the on-package link that stitches them into one logical GPU. At 10 TB/s it's faster than HBM, so the die boundary is invisible to software — CUDA sees one device.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Why 2 dies</span>  <span class="kv2 info">Reticle limit: ~850 mm² max per die. 208B transistors needs 2 dies.</span>
+        <span class="kk">Bandwidth</span>   <span class="kv2 good">~10 TB/s coherent — faster than HBM (8 TB/s), so never the bottleneck</span>
+        <span class="kk">Coherence</span>   <span class="kv2 good">Full L2 cache coherence across both dies</span>
+        <span class="kk">Config</span>      <span class="kv2">2 × 80 SMs = 160 SMs · 4 L2 partitions/die · 6 HBM stacks/die</span>
+        <span class="kk">SW view</span>     <span class="kv2">Single CUDA device — no code changes needed vs single-die GPU</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /interconnects -->
+
+
+<!-- ════════════ ARCHITECTURE ════════════ -->
+<div class="sec-label">Architecture — Blackwell / Ultra Deep Dive</div>
+
+<!-- ── Per-GPU Silicon ── -->
+<div class="sec-label" style="margin-top:0; margin-bottom:14px; font-size:.62rem;">Per-GPU Silicon — New Blackwell Engines</div>
+<div class="grid">
+
+  <!-- HW Decompression Engine -->
+  <div class="card" data-tags="architecture blackwell">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">Decompression Engine (DE) <span class="nb nb-new">Blackwell</span></div><div class="abbr" style="background:var(--accent4)">DE</div></div>
+      <div class="dtags"><span class="dtag">Architecture</span><span class="dtag">Memory</span></div>
+      <p class="cdesc">Hardware decompression unit that intercepts compressed data on the path from HBM to compute. Store model weights or KV cache compressed in VRAM → DE expands them on-the-fly at up to 539 GB/s. At 3:1 compression, effective HBM bandwidth triples (8 TB/s → ~24 TB/s). Combined with NVFP4, this means Blackwell moves far more model data per byte than older FP16 workflows.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Throughput</span>   <span class="kv2 good">Up to 539 GB/s per GPU</span>
+        <span class="kk">Formats</span>      <span class="kv2 info">LZ4 · Snappy · Zstandard · GZIP · ANS</span>
+        <span class="kk">How it works</span><span class="kv2">Transparent — sits in memory path, CUDA kernels don't need changes</span>
+        <span class="kk">Key use</span>     <span class="kv2 good">Compressed weights in HBM → expand on-chip before GEMM (2–3× effective BW)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RAS Engine -->
+  <div class="card" data-tags="architecture blackwell">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">RAS Engine — Reliability <span class="nb nb-new">Blackwell</span></div><div class="abbr" style="background:var(--accent6)">RAS</div></div>
+      <div class="dtags"><span class="dtag">Architecture</span><span class="dtag">Reliability</span></div>
+      <p class="cdesc">Dedicated hardware for Reliability, Availability, Serviceability. At 10K+ GPU scale, multiple GPUs fail daily. RAS continuously monitors health, predicts failures before they happen, and enables the system to checkpoint and migrate jobs — keeping training alive without manual intervention.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Monitors</span>     <span class="kv2">Thermals, power, SM errors, HBM ECC, NVLink status — always on</span>
+        <span class="kk">Predictive</span>   <span class="kv2 good">Warns before hard failure → proactive checkpoint + hot migration</span>
+        <span class="kk">Self-heal</span>    <span class="kv2 info">SM row remapping: retires faulty SM rows, GPU keeps running at ~99% perf</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /per-gpu silicon -->
+
+<!-- ── Superchip & Node ── -->
+<div class="sec-label" style="margin-top:8px; margin-bottom:14px; font-size:.62rem;">Superchip &amp; Node — Grace CPU + GPU Package</div>
+<div class="grid">
+
+  <!-- Grace CPU -->
+  <div class="card" data-tags="architecture blackwell">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">Grace CPU + NVLink-C2C</div><div class="abbr" style="background:var(--accent6)">GRC</div></div>
+      <div class="dtags"><span class="dtag">Architecture</span><span class="dtag">CPU+GPU</span></div>
+      <p class="cdesc">Arm-based CPU on the same superchip as the GPU, connected via NVLink-C2C (900 GB/s) instead of PCIe. This means CPU↔GPU transfers run at 7× PCIe speed with a unified address space — enabling efficient KV cache overflow to CPU DRAM and ZeRO-Infinity offloading at NVLink bandwidth.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Cores</span>        <span class="kv2">72 × Arm Neoverse V2</span>
+        <span class="kk">L2 cache</span>     <span class="kv2 good">2 MB/core <span class="nb nb-ult">GB300 fix from GB200's 1 MB/core</span></span>
+        <span class="kk">DRAM</span>         <span class="kv2 good">480 GB LPDDR5X · 512 GB/s per CPU</span>
+        <span class="kk">C2C link</span>     <span class="kv2 good">900 GB/s coherent CPU↔GPU — 7× PCIe 5</span>
+        <span class="kk">NVL72 pool</span>  <span class="kv2 good">36 CPUs × 480 GB = 17 TB CPU DRAM per rack</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- GB300 Blackwell Ultra -->
+  <div class="card" data-tags="architecture blackwell">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">B300 / GB300 — Blackwell Ultra <span class="nb nb-ult">2025</span></div><div class="abbr" style="background:var(--accent7)">BLK-U</div></div>
+      <div class="dtags"><span class="dtag">Architecture</span><span class="dtag">Blackwell Ultra</span></div>
+      <p class="cdesc">The "fixed and upgraded" version of B200/GB200. More SMs, 50% more VRAM, 50% more FP4 compute. Most importantly, it fixes two GB200 pain points: the CPU L2 cache was too small (hurting preprocessing), and the RDMA path added latency because the NIC routed through the CPU.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">SMs</span>         <span class="kv2 ultra">160 (+12 vs B200's 148)</span>
+        <span class="kk">HBM3e</span>       <span class="kv2 ultra">288 GB — +50% vs B200 (192 GB)</span>
+        <span class="kk">NVFP4</span>       <span class="kv2 ultra">15 PFLOPS — 1.5× B200</span>
+        <span class="kk">NIC fix</span>     <span class="kv2 ultra">CX8 + external PCIe switch → direct GPU-to-NIC RDMA path <span class="nb nb-ult">Key Fix</span></span>
+        <span class="kk">CPU L2 fix</span> <span class="kv2 ultra">2 MB/core (vs GB200's under-provisioned 1 MB/core) <span class="nb nb-ult">Key Fix</span></span>
+        <span class="kk">Power</span>       <span class="kv2 warn">~1.1–1.4 kW TDP per GPU</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /superchip -->
+
+<!-- ── Rack-Scale Systems ── -->
+<div class="sec-label" style="margin-top:8px; margin-bottom:14px; font-size:.62rem;">Rack-Scale Systems — NVL72</div>
+<div class="grid">
+
+  <div class="card card-wide" data-tags="architecture blackwell interconnect">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">NVL72 — Rack-Scale GPU System <span class="nb nb-blk">Blackwell</span></div><div class="abbr" style="background:var(--accent2)">NVL72</div></div>
+      <div class="dtags"><span class="dtag">Architecture</span><span class="dtag">System</span><span class="dtag">Multi-GPU</span></div>
+      <p class="cdesc">An NVL72 is one liquid-cooled rack containing 36 Grace Blackwell Superchips — each superchip has 1 Grace CPU + 2 GPUs — giving 72 GPUs and 36 CPUs total. All 72 GPUs are connected via NVLink 5 through NVLink Switch sleds, forming a single flat, all-to-all fabric with no hops. From any GPU's perspective, all other 71 GPUs are reachable at full NVLink speed (~1 μs). This makes the entire rack behave like one giant GPU for tensor parallelism, expert parallelism, and ZeRO-3.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">GPUs per rack</span>   <span class="kv2">72 × Blackwell GPUs (2 per superchip × 36 superchips)</span>
+        <span class="kk">CPUs per rack</span>   <span class="kv2">36 × Grace CPUs — each connected to 2 GPUs via NVLink-C2C</span>
+        <span class="kk">Total HBM</span>       <span class="kv2 good">20.7 TB HBM3e (GB300 NVL72)</span>
+        <span class="kk">Total CPU DRAM</span>  <span class="kv2 good">17 TB LPDDR5X (36 × 480 GB)</span>
+        <span class="kk">NVLink fabric</span>   <span class="kv2 good">130 TB/s any-to-any — all 72 GPUs non-blocking via NVLink Switch sleds</span>
+        <span class="kk">Latency</span>         <span class="kv2 good">~1 μs any GPU → any GPU within the rack</span>
+        <span class="kk">Cross-node</span>      <span class="kv2 warn">IB / RoCE to other racks — ~18× slower than NVLink; TP &amp; EP must stay within NVL72</span>
+        <span class="kk">Key use</span>         <span class="kv2">Large model training and inference — TP/EP/SP within rack, PP &amp; DP across racks</span>
+      </div>
+      <div class="scope">
+        <div class="slbl">Why it matters for parallelism</div>
+        Tensor parallelism and expert parallelism require very frequent all-reduce / all-to-all collectives. At NVLink speeds (130 TB/s fabric) these are cheap. Crossing to InfiniBand between racks is ~18× slower, so TP degree is limited to what fits within the NVL72 domain. Pipeline parallelism (small point-to-point activations) and data parallelism (infrequent gradient sync) are the only strategies that can span racks efficiently.
+      </div>
+    </div>
+  </div>
+
+</div><!-- /rack-scale -->
+
+
+
+<!-- ════════════ AT-A-GLANCE TABLES ════════════ -->
+<div class="sec-label">At-a-Glance Comparison</div>
+<div class="grid">
+
+  <!-- Memory Tier Table -->
+  <div class="card card-wide" data-tags="memory architecture">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">Memory Tier Summary <span class="nb nb-blk">Blackwell / B300</span></div><div class="abbr" style="background:var(--accent1)">REF</div></div>
+      <p class="cdesc">Full hierarchy from registers to cross-node fabric, ordered fastest → slowest. Specs shown are for Blackwell (B300) unless noted. NVLink Peer and IB are interconnects — they appear here because from the GPU kernel's perspective they are the next addressable "storage" levels beyond local HBM, reachable via GPUDirect without CPU involvement. Purple rows = Blackwell-specific tiers.</p>
+    </div>
+    <div class="cb">
+      <div class="legend">
+        <div class="li"><div class="ld" style="background:var(--accent4)"></div>Fast</div>
+        <div class="li"><div class="ld" style="background:var(--accent5)"></div>Medium</div>
+        <div class="li"><div class="ld" style="background:var(--accent3)"></div>Bottleneck</div>
+        <div class="li"><div class="ld" style="background:rgba(124,106,247,.4)"></div>Blackwell changed</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Tier</th><th>Bandwidth</th><th>Latency</th><th>Capacity</th><th>Scope</th><th>Managed By</th><th>Key LLM Use</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Registers</td><td><span class="nbadge f">~50 TB/s</span></td><td class="tf">1 cycle</td><td class="td">256 KB/SM</td><td class="td">Per thread</td><td>Compiler</td><td>Live vars; epilogue fusions (freed from accum. on Blackwell)</td></tr>
+            <tr class="rblk"><td><strong>TMEM</strong> <span class="nb nb-blk">Blackwell</span></td><td><span class="nbadge f">16/8 TB/s R/W</span></td><td class="tf">~420c</td><td class="td">256 KB/SM</td><td class="td">Per SM TC ops</td><td>Programmer (tcgen05)</td><td>MMA accumulator matrix D — all Blackwell GPUs</td></tr>
+            <tr><td>SMEM / L1</td><td><span class="nbadge f">~19 TB/s</span></td><td class="tf">~20–30c</td><td class="td">228 KB/SM SM100 (B300/GB300) · 128 KB/SM SM120 (consumer). CTA Pairs ~456 KB effective across 2 SMs</td><td class="td">Per block</td><td>Programmer</td><td>Tile staging; operands A&amp;B for Tensor Cores; inter-thread comms, reductions &amp; shared data for CUDA cores</td></tr>
+            <tr class="rblk"><td>L2 Cache</td><td><span class="nbadge f">~12 TB/s</span></td><td class="tm">~100–200c</td><td class="td">192 MB</td><td class="td">All SMs</td><td>HW (+ hints)</td><td>Hot weights, attention masks, head projections</td></tr>
+            <tr><td>HBM (VRAM)</td><td><span class="nbadge s">8 TB/s</span></td><td class="ts">~700–1000c</td><td class="td">288 GB HBM3e</td><td class="td">Whole GPU</td><td>CUDA alloc</td><td>Weights, activations, KV cache, optimizer state</td></tr>
+            <tr class="rblk"><td>NVLink Peer <span class="td" style="font-weight:400;font-size:.7em">(interconnect)</span></td><td><span class="nbadge s">1,800 GB/s</span></td><td class="ts">~1–5 μs</td><td class="td">Peer GPU HBM</td><td class="td">NVSwitch domain</td><td>NCCL / GPUDirect</td><td>TP all-reduce, ZeRO-3 all-gather, EP dispatch — GPU accesses remote HBM without CPU</td></tr>
+            <tr><td>IB / RoCE Cross-Node <span class="td" style="font-weight:400;font-size:.7em">(interconnect)</span></td><td><span class="nbadge s">~100 GB/s</span></td><td class="ts">~5–20 μs</td><td class="td">Remote node HBM</td><td class="td">All nodes</td><td>NCCL / MPI / GPUDirect</td><td>PP P2P activations, DP grad sync — slowest path, keep TP/EP within NVLink domain</td></tr>
+            <tr><td>CPU DRAM</td><td><span class="nbadge s">512 GB/s</span></td><td class="ts">~300–500 ns</td><td class="td">480 GB/Grace (NVLink-C2C)</td><td class="td">CPU</td><td>CPU alloc</td><td>ZeRO-Infinity offload, KV overflow, dataset staging. NVLink-C2C (900 GB/s coherent) to Grace CPU</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- Roofline -->
+  <div class="card card-wide" data-tags="architecture compute memory">
+    <div class="ch">
+      <div class="ch-top"><div class="cn">Roofline Model — Am I Compute-Bound or Memory-Bound?</div><div class="abbr" style="background:var(--accent4)">ROOF</div></div>
+      <div class="dtags"><span class="dtag">Analysis</span><span class="dtag">Bottleneck</span></div>
+      <p class="cdesc">The roofline tells you which ceiling your kernel hits. Divide FLOP by bytes loaded from HBM = arithmetic intensity (AI). If AI &lt; ridge point, you're memory-bound (waiting for data). If AI &gt; ridge point, you're compute-bound (math units are the limit). At FP4 precision, the ridge point is so high (~5000) that almost every LLM operation is memory-bound.</p>
+    </div>
+    <div class="cb">
+      <div class="kv">
+        <span class="kk">Formula</span>              <span class="kv2">AI = FLOP ÷ bytes loaded from HBM. Below ridge → memory-bound. Above → compute-bound.</span>
+        <span class="kk">Ridge point</span>         <span class="kv2 warn">AI = compute TFLOPS ÷ HBM BW. Most LLM ops fall well below — they're memory-bound.</span>
+      </div>
+      <hr class="div"/>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>LLM Operation</th><th>Typical AI (FLOP/B)</th><th>Bound</th><th>Mitigation</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Element-wise (gelu, add, dropout)</td><td class="ts">&lt;1</td><td class="ts">Memory</td><td>Kernel fusion — avoid HBM round-trips between ops</td></tr>
+            <tr><td>LayerNorm / Softmax</td><td class="ts">~1–5</td><td class="ts">Memory</td><td>Fused kernels (FlashAttention folds softmax into attention)</td></tr>
+            <tr><td>Decode attention (batch=1)</td><td class="ts">~10–30</td><td class="ts">Memory</td><td>GQA / MQA / MLA — fewer KV heads = fewer HBM reads</td></tr>
+            <tr><td>MoE expert FFN dispatch</td><td class="tm">~20–50</td><td class="tm">Mem + Comm</td><td>Expert parallelism + token packing to fill batches</td></tr>
+            <tr><td>GEMM medium batch</td><td class="tm">~100–500</td><td class="tm">Transitional</td><td>FP8/FP4 Tensor Cores via CUTLASS tiled GEMMs; TMEM overlaps epilogue</td></tr>
+            <tr><td>Prefill GEMM (large batch)</td><td class="tf">&gt;500</td><td class="tf">Compute</td><td>FP8/FP4 tcgen05 async MMA + CTA Pairs; multi-stage software pipelining</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /tables -->
+
+</div><!-- /main -->
+
+<script>
+document.querySelectorAll('.pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    const t = pill.dataset.t;
+    document.querySelectorAll('.card').forEach(card => {
+      if (t === 'all') { card.style.display = ''; return; }
+      const tags = (card.dataset.tags || '').split(' ');
+      card.style.display = tags.includes(t) ? '' : 'none';
+    });
+  });
+});
+</script>
+</body>
+</html>
