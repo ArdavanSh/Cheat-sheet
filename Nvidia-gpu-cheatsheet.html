@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>GPU Hardware & Memory Hierarchy Cheat Sheet</title>
+<title>Nvidia GPU Hardware & Memory Hierarchy Cheat Sheet</title>
 <style>
   :root {
     --bg: #f4f5fa; --surface: #fff; --surface2: #f0f1f8; --border: #dde0f0;
@@ -103,7 +103,7 @@
 
 <div class="topbar">
   <div>
-    <div class="topbar-title">GPU Hardware &amp; Memory Hierarchy</div>
+    <div class="topbar-title">Nvidia GPU Hardware &amp; Memory Hierarchy</div>
     <div class="topbar-sub">Cheat Sheet — Compute · Memory · Bandwidth · Latency · Capacity · Interconnects · Architecture</div>
   </div>
   <button class="theme-btn" id="theme-toggle" onclick="
@@ -129,7 +129,7 @@
 <div class="grid" style="margin-bottom:36px">
 <div class="card card-wide" data-tags="architecture blackwell interconnect">
   <div class="ch">
-    <div class="ch-top"><div class="cn">GB300 Superchip — Interactive System Layout <span class="nb nb-ult">Blackwell Ultra</span></div><div class="abbr" style="background:linear-gradient(135deg,#26c6da,#7c6af7)">SYS</div></div>
+    <div class="ch-top"><div class="cn">GB300 Superchip — Interactive Layout <span class="nb nb-ult">Blackwell Ultra</span></div><div class="abbr" style="background:linear-gradient(135deg,#26c6da,#7c6af7)">SYS</div></div>
     <div class="dtags"><span class="dtag">Architecture</span><span class="dtag">Superchip</span><span class="dtag">Interactive</span></div>
     <p class="cdesc">One GB300 Superchip: 1 Grace CPU + 2 B300 GPUs connected via NVLink-C2C at 900 GB/s each. Each B300 is a <strong>dual-die</strong> GPU — two dies linked internally by NV-HBI at 10 TB/s, appearing as one device to software. 36 superchips form one NVL72 rack. Hover any block for specs.</p>
   </div>
@@ -615,7 +615,7 @@
 <div class="grid" style="margin-bottom:36px">
 <div class="card card-wide" data-tags="architecture blackwell compute memory interconnect">
   <div class="ch">
-    <div class="ch-top"><div class="cn">B300 Die Map — Interactive Hardware Layout <span class="nb nb-ult">Blackwell Ultra</span></div><div class="abbr" style="background:linear-gradient(135deg,#ce93d8,#7c6af7)">DIE</div></div>
+    <div class="ch-top"><div class="cn">B300 Die Map — Interactive Layout <span class="nb nb-ult">Blackwell Ultra</span></div><div class="abbr" style="background:linear-gradient(135deg,#ce93d8,#7c6af7)">DIE</div></div>
     <div class="dtags"><span class="dtag">Architecture</span><span class="dtag">Blackwell Ultra</span><span class="dtag">Interactive</span></div>
     <p class="cdesc">Schematic floorplan of the Blackwell Ultra B300 dual-die GPU. Based on NVIDIA's official die diagram. Each die has 80 SMs across 4 GPCs, with L2 cache partitions distributed across the die (192 MB total, 4 partitions per die), 6 HBM3e stacks on the outer edge, and a GigaThread Engine (housing work scheduling, MIG partitioning, RAS reliability, and DE hardware decompression). NVLink 5 and PCIe Gen 6 pads sit on the package perimeter. L1 cache is unified with SMEM inside each SM (228 KB on SM100). Hover any block to see specs.</p>
   </div>
